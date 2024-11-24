@@ -11,7 +11,7 @@
 
 ## Overview
 
-`holbroow6502` is an implementation of a fully functional 6502 CPU emulator written in C. This project is part of the SCC 300 Third Year Project at Lancaster University, overseen by Professor Andrew Scott.
+`holbroow6502` is an implementation of a fully functional NES emulator written in C. This project is part of the SCC 300 Third Year Project at Lancaster University, overseen by Professor Andrew Scott.
 
 ## Features
 
