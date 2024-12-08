@@ -131,6 +131,12 @@ typedef struct {
 // Declare the opcode_table as extern
 extern const Opcode opcode_table[256];
 
+// Declare a table of referrable instruction names for debug/printf
+extern const char *InstructionStrings[56];
+
+// Delcare a table of referrable addressing modes for debug/printf
+extern const char *AddressModeStrings[13];
+
 // Function to initialize the CPU
 Cpu* init_cpu(Bus* bus);
 

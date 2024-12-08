@@ -8,6 +8,7 @@
 #include "Bus.h"
 #include <stdlib.h>
 #include <stdio.h>
+#include <string.h>
 
 
 // Define the opcode_table
@@ -209,8 +210,85 @@ const Opcode opcode_table[256] = {
     [0x40] = {RTI, IMPLIED, 1, 6},
 };
 
-// Helper Functions Implementations
+// Define mapped 'Instruction' string names
+const char *InstructionStrings[56] = {
+    "LDA",
+    "LDX",
+    "LDY",
+    "STA",
+    "STX",
+    "STY",
+    "TAX",
+    "TAY",
+    "TXA",
+    "TYA",
+    "TSX",
+    "TXS",
+    "PHA",
+    "PHP",
+    "PLA",
+    "PLP",
+    "AND",
+    "EOR",
+    "ORA",
+    "BIT",
+    "ADC",
+    "SBC",
+    "CMP",
+    "CPX",
+    "CPY",
+    "INC",
+    "INX",
+    "INY",
+    "DEC",
+    "DEX",
+    "DEY",
+    "ASL",
+    "LSR",
+    "ROL",
+    "ROR",
+    "JMP",
+    "JSR",
+    "RTS",
+    "BCC",
+    "BCS",
+    "BEQ",
+    "BMI",
+    "BNE",
+    "BPL",
+    "BVC",
+    "BVS",
+    "CLC",
+    "CLD",
+    "CLI",
+    "CLV",
+    "SEC",
+    "SED",
+    "SEI",
+    "BRK",
+    "NOP",
+    "RTI"
+};
 
+// Define mapped 'Addressing Modes' string names
+const char *AddressModeStrings[13] = {
+    "IMMEDIATE",
+    "ZERO_PAGE",
+    "ABSOLUTE",
+    "ZERO_PAGE_X",
+    "ZERO_PAGE_Y",
+    "ABSOLUTE_X",
+    "ABSOLUTE_Y",
+    "INDEXED_INDIRECT",
+    "INDIRECT_INDEXED",
+    "ACCUMULATOR",
+    "IMPLIED",
+    "RELATIVE",
+    "INDIRECT"
+};
+
+
+// Helper Functions Implementations
 uint8_t fetch_operand(Cpu* cpu, AddressingMode mode, uint16_t* address) {
     uint8_t value = 0;
     switch (mode) {
@@ -369,13 +447,37 @@ Cpu* init_cpu(Bus* bus) {
 void print_cpu(Cpu* cpu) {
     printf("|  A:%02x |  X:%02x |  Y:%02x |  SP:%04x |  PC:%04x |\n", cpu->A, cpu->X, cpu->Y, cpu->SP, cpu->PC);
     printf("| C:%01x | Z:%01x | I:%01x | D:%01x | B:%01x | - | O:%01x | N:%01x |\n", (cpu->STATUS >> 0) & 1,
-                                                                     (cpu->STATUS >> 1) & 1,
-                                                                     (cpu->STATUS >> 2) & 1,
-                                                                     (cpu->STATUS >> 3) & 1,
-                                                                     (cpu->STATUS >> 4) & 1,
-                                                                     (cpu->STATUS >> 6) & 1,
-                                                                     (cpu->STATUS >> 7) & 1);
+                                                                                     (cpu->STATUS >> 1) & 1,
+                                                                                     (cpu->STATUS >> 2) & 1,
+                                                                                     (cpu->STATUS >> 3) & 1,
+                                                                                     (cpu->STATUS >> 4) & 1,
+                                                                                     (cpu->STATUS >> 6) & 1,
+                                                                                     (cpu->STATUS >> 7) & 1);
     printf("\n");
+}
+
+void print_instruction(Cpu* cpu, Opcode c, uint8_t n) {
+    // PC ADDR | INSTRUCTION | VALUE? (value of PC + 1) | ADDRESSING MODE
+    if (strcmp(InstructionStrings[c.instruction], "BCC") == 0 || 
+        strcmp(InstructionStrings[c.instruction], "BCS") == 0 || 
+        strcmp(InstructionStrings[c.instruction], "BEQ") == 0 || 
+        strcmp(InstructionStrings[c.instruction], "BMI") == 0 || 
+        strcmp(InstructionStrings[c.instruction], "BNE") == 0 || 
+        strcmp(InstructionStrings[c.instruction], "BPL") == 0 || 
+        strcmp(InstructionStrings[c.instruction], "BVC") == 0 || 
+        strcmp(InstructionStrings[c.instruction], "BVS") == 0 || 
+        strcmp(InstructionStrings[c.instruction], "JMP") == 0 || 
+        strcmp(InstructionStrings[c.instruction], "JSR") == 0) {
+        printf("$%04x:  %s  #$%04x  {%s}\n", cpu->PC, 
+                                            InstructionStrings[c.instruction], 
+                                            n,
+                                            AddressModeStrings[c.addressing_mode]);
+    } else {
+        printf("$%04x:  %s  #$%02x  {%s}\n", cpu->PC, 
+                                            InstructionStrings[c.instruction], 
+                                            n,
+                                            AddressModeStrings[c.addressing_mode]);
+    }
 }
 
 // Main CPU Execution Loop
@@ -389,6 +491,7 @@ void run_cpu(Cpu* cpu) {
     print_cpu(cpu);
 
     while (cpu->running) {
+
         // Here we can optionally cap the program at a number of instructions 
         // in order to save time while needing to test with large instruction sequences
         // without having to step 1 by 1.
@@ -398,7 +501,7 @@ void run_cpu(Cpu* cpu) {
         if (run_capped && cpu->A == capped_value) {
             exit(0);
         }
-
+        
         // Here we allow instruction stepping using the ENTER key
         int c  = getchar();
         while (c != '\n' && c != EOF) {
@@ -407,6 +510,8 @@ void run_cpu(Cpu* cpu) {
 
         uint8_t opcode = bus_read(cpu->bus, cpu->PC++);
         Opcode current_opcode = opcode_table[opcode];
+        uint8_t next_opcode = bus_read(cpu->bus, cpu->PC++);
+        cpu->PC--;  // We increment the PC to read the next opcode, so we need to go back (I hate this...)
 
         switch (current_opcode.instruction) {
             case LDA:
@@ -584,8 +689,12 @@ void run_cpu(Cpu* cpu) {
                 break;
         }
 
+        printf("\n");
         printf("CPU: Instruction %d: \n", i+1);
         printf("Current Opcode: %02x\n", opcode);
+        printf("\n");
+        print_instruction(cpu, current_opcode, next_opcode);
+        printf("\n");
         print_cpu(cpu);
 
         i++;
