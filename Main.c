@@ -9,7 +9,7 @@
 #include <stdbool.h>
 #include <ctype.h>
 
-void load_program(Bus* bus, uint16_t start_address, const char* hex_string) {
+int load_program(Bus* bus, uint16_t start_address, const char* hex_string) {
     uint16_t current_address = start_address;   // Set the current memory offset to the intended start pos
     const char* ptr = hex_string;               // Set a pointer to the passed string containing the object code
     char buffer[3] = {0};                       // Two characters for a HEX byte
@@ -53,6 +53,7 @@ void load_program(Bus* bus, uint16_t start_address, const char* hex_string) {
     }
 
     printf("MANAGER: Program loaded successfully, starting at 0x%04X.\n", start_address);
+    return start_address;
 }
 
 // Main function
@@ -65,11 +66,11 @@ int main() {
 
 
     // Program code to load:    Multiply 10 by 3
-    load_program(bus, 0x8000, "A2 0A 8E 00 00 A2 03 8E 01 00 AC 00 00 A9 00 18 6D 01 00 88 D0 FA 8D 02 00 EA EA EA");
-
+    // Grab the start_address from the loaded program, to point the PC towards
+    int start_address = load_program(bus, 0x0100, "A2 0A 8E 00 00 A2 03 8E 01 00 AC 00 00 A9 00 18 6D 01 00 88 D0 FA 8D 02 00 EA EA EA");
 
     // Set PC to start of program
-    cpu->PC = 0x8000;
+    cpu->PC = start_address;
 
     // Run the CPU
     run_cpu(cpu);
@@ -77,8 +78,7 @@ int main() {
     // Cleanup
     free(cpu);
     free(bus);
-    // Add any additional cleanup for the Bus if necessary
+    // Might need to add any additional cleanup for the Bus if necessary, in the future...
 
     return 0;
 }
-

@@ -19,18 +19,20 @@
 // CPU Structure
 typedef struct {
     // CPU Registers
-    uint8_t A;
-    uint8_t X;
-    uint8_t Y;
-    uint8_t SP;
-    uint16_t PC;
-    uint8_t STATUS;
+    uint8_t A;          // Accumulator
+    uint8_t X;          // X Register
+    uint8_t Y;          // Y Register
+    uint8_t SP;         // Stack Pointer
+    uint16_t PC;        // Program Counter
+    uint8_t STATUS;     // STATUS Register
 
+    bool running;       // Is the CPU running?
+    
     // Bus
     Bus* bus;   // Reference to the bus
 
-    // Is the CPU running?
-    bool running;
+    // Cycle counter
+    uint64_t cycles_left;
 } Cpu;
 
 // Enums for instructions and addressing modes
