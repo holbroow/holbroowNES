@@ -5,6 +5,12 @@
 #include "Bus.h"
 #include <stdint.h>
 #include <stdbool.h>
+#include <time.h>
+
+#define CPU_CYCLES_PERSEC 1690000
+#define FRAMES_PERSEC 60
+#define CYCLES_PER_FRAME (CPU_CYCLES_PERSEC / FRAMES_PERSEC)
+#define FRAME_TIME_PERSEC (1 / 60)
 
 // Status flags
 #define FLAG_CARRY      0x01
@@ -32,7 +38,7 @@ typedef struct {
     Bus* bus;   // Reference to the bus
 
     // Cycle counter
-    uint64_t cycles_left;
+    int cycles_left;
 } Cpu;
 
 // Enums for instructions and addressing modes
@@ -107,19 +113,19 @@ typedef enum {
 } Instruction;
 
 typedef enum {
-    IMMEDIATE,
-    ZERO_PAGE,
-    ZERO_PAGE_X,
-    ZERO_PAGE_Y,
-    ABSOLUTE,
-    ABSOLUTE_X,
-    ABSOLUTE_Y,
-    INDIRECT,
-    INDEXED_INDIRECT,    // (Indirect,X)
-    INDIRECT_INDEXED,    // (Indirect),Y
-    RELATIVE,
-    ACCUMULATOR,
-    IMPLIED,
+    IMM,    // IMMEDIATE
+    ZP0,    // ZERO_PAGE
+    ZPX,    // ZERO_PAGE_X
+    ZPY,    // ZERO_PAGE_Y
+    ABS,    // ABSOLUTE
+    ABX,    // ABSOLUTE X
+    ABY,    // ABSOLUTE Y
+    IND,    // INDIRECT
+    IZX,    // INDEXED INDIRECT
+    IZY,    // INDIRECT INDEXED
+    REL,    // RELATIVE
+    ACC,    // ACCUMULATOR
+    IMP,    // IMPLIED
 } AddressingMode;
 
 // Opcode structure

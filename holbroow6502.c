@@ -1,213 +1,216 @@
 // Will Holbrook | Lancaster University Third Year Project 2024 (SCC 300: EmuPC)
 // holbroow6502.c (Cpu with defined, and handled, addressing modes, instructions, and therefore opcodes!)
+// NOTE: This is the 2A03 cpu (NTSC 60hz at 1.79Mhz, not the "2A07 (PAL at 50hz and 1.66Mhz)"
 
-// Great resource, this file is mostly inspired from this datasheet.
+// Great resource, this file and its concepts are mostly developed using this datasheet.
 // https://www.nesdev.org/obelisk-6502-guide
 
 #include "holbroow6502.h"
 #include "Bus.h"
 #include <stdlib.h>
+#include <stddef.h>
 #include <stdio.h>
+#include <stdint.h>
 #include <string.h>
-
+#include <windows.h>
 
 // Define the opcode_table
 const Opcode opcode_table[256] = {
     // Initialize all 256 opcodes
-    // For simplicity, initialize unspecified opcodes as NOP with IMPLIED addressing
-    [0 ... 255] = {NOP, IMPLIED, 1, 2},
+    // For simplicity, initialize unspecified opcodes as NOP with IMP addressing
+    [0 ... 255] = {NOP, IMP, 1, 2},
 
     // Define specific opcodes as per the 6502 instruction set
     // Load/Store Operations
-    [0xA9] = {LDA, IMMEDIATE, 2, 2},
-    [0xA5] = {LDA, ZERO_PAGE, 2, 3},
-    [0xAD] = {LDA, ABSOLUTE, 3, 4},
-    [0xB5] = {LDA, ZERO_PAGE_X, 2, 4},
-    [0xBD] = {LDA, ABSOLUTE_X, 3, 4},
-    [0xB9] = {LDA, ABSOLUTE_Y, 3, 4},
-    [0xA1] = {LDA, INDEXED_INDIRECT, 2, 6},
-    [0xB1] = {LDA, INDIRECT_INDEXED, 2, 5},
+    [0xA9] = {LDA, IMM, 2, 2},
+    [0xA5] = {LDA, ZP0, 2, 3},
+    [0xAD] = {LDA, ABS, 3, 4},
+    [0xB5] = {LDA, ZPX, 2, 4},
+    [0xBD] = {LDA, ABX, 3, 4},
+    [0xB9] = {LDA, ABY, 3, 4},
+    [0xA1] = {LDA, IZX, 2, 6},
+    [0xB1] = {LDA, IZY, 2, 5},
 
-    [0xA2] = {LDX, IMMEDIATE, 2, 2},
-    [0xA6] = {LDX, ZERO_PAGE, 2, 3},
-    [0xAE] = {LDX, ABSOLUTE, 3, 4},
-    [0xB6] = {LDX, ZERO_PAGE_Y, 2, 4},
-    [0xBE] = {LDX, ABSOLUTE_Y, 3, 4},
+    [0xA2] = {LDX, IMM, 2, 2},
+    [0xA6] = {LDX, ZP0, 2, 3},
+    [0xAE] = {LDX, ABS, 3, 4},
+    [0xB6] = {LDX, ZPY, 2, 4},
+    [0xBE] = {LDX, ABY, 3, 4},
 
-    [0xA0] = {LDY, IMMEDIATE, 2, 2},
-    [0xA4] = {LDY, ZERO_PAGE, 2, 3},
-    [0xAC] = {LDY, ABSOLUTE, 3, 4},
-    [0xB4] = {LDY, ZERO_PAGE_X, 2, 4},
-    [0xBC] = {LDY, ABSOLUTE_X, 3, 4},
+    [0xA0] = {LDY, IMM, 2, 2},
+    [0xA4] = {LDY, ZP0, 2, 3},
+    [0xAC] = {LDY, ABS, 3, 4},
+    [0xB4] = {LDY, ZPX, 2, 4},
+    [0xBC] = {LDY, ABX, 3, 4},
 
-    [0x85] = {STA, ZERO_PAGE, 2, 3},
-    [0x8D] = {STA, ABSOLUTE, 3, 4},
-    [0x95] = {STA, ZERO_PAGE_X, 2, 4},
-    [0x9D] = {STA, ABSOLUTE_X, 3, 5},
-    [0x99] = {STA, ABSOLUTE_Y, 3, 5},
-    [0x81] = {STA, INDEXED_INDIRECT, 2, 6},
-    [0x91] = {STA, INDIRECT_INDEXED, 2, 6},
+    [0x85] = {STA, ZP0, 2, 3},
+    [0x8D] = {STA, ABS, 3, 4},
+    [0x95] = {STA, ZPX, 2, 4},
+    [0x9D] = {STA, ABX, 3, 5},
+    [0x99] = {STA, ABY, 3, 5},
+    [0x81] = {STA, IZX, 2, 6},
+    [0x91] = {STA, IZY, 2, 6},
 
-    [0x86] = {STX, ZERO_PAGE, 2, 3},
-    [0x8E] = {STX, ABSOLUTE, 3, 4},
-    [0x96] = {STX, ZERO_PAGE_Y, 2, 4},
+    [0x86] = {STX, ZP0, 2, 3},
+    [0x8E] = {STX, ABS, 3, 4},
+    [0x96] = {STX, ZPY, 2, 4},
 
-    [0x84] = {STY, ZERO_PAGE, 2, 3},
-    [0x8C] = {STY, ABSOLUTE, 3, 4},
-    [0x94] = {STY, ZERO_PAGE_X, 2, 4},
+    [0x84] = {STY, ZP0, 2, 3},
+    [0x8C] = {STY, ABS, 3, 4},
+    [0x94] = {STY, ZPX, 2, 4},
 
     // Register Transfers
-    [0xAA] = {TAX, IMPLIED, 1, 2},
-    [0xA8] = {TAY, IMPLIED, 1, 2},
-    [0x8A] = {TXA, IMPLIED, 1, 2},
-    [0x98] = {TYA, IMPLIED, 1, 2},
+    [0xAA] = {TAX, IMP, 1, 2},
+    [0xA8] = {TAY, IMP, 1, 2},
+    [0x8A] = {TXA, IMP, 1, 2},
+    [0x98] = {TYA, IMP, 1, 2},
 
     // Stack Operations
-    [0xBA] = {TSX, IMPLIED, 1, 2},
-    [0x9A] = {TXS, IMPLIED, 1, 2},
-    [0x48] = {PHA, IMPLIED, 1, 3},
-    [0x08] = {PHP, IMPLIED, 1, 3},
-    [0x68] = {PLA, IMPLIED, 1, 4},
-    [0x28] = {PLP, IMPLIED, 1, 4},
+    [0xBA] = {TSX, IMP, 1, 2},
+    [0x9A] = {TXS, IMP, 1, 2},
+    [0x48] = {PHA, IMP, 1, 3},
+    [0x08] = {PHP, IMP, 1, 3},
+    [0x68] = {PLA, IMP, 1, 4},
+    [0x28] = {PLP, IMP, 1, 4},
 
     // Logical Instructions
-    [0x29] = {AND, IMMEDIATE, 2, 2},
-    [0x25] = {AND, ZERO_PAGE, 2, 3},
-    [0x2D] = {AND, ABSOLUTE, 3, 4},
-    [0x35] = {AND, ZERO_PAGE_X, 2, 4},
-    [0x3D] = {AND, ABSOLUTE_X, 3, 4},
-    [0x39] = {AND, ABSOLUTE_Y, 3, 4},
-    [0x21] = {AND, INDEXED_INDIRECT, 2, 6},
-    [0x31] = {AND, INDIRECT_INDEXED, 2, 5},
+    [0x29] = {AND, IMM, 2, 2},
+    [0x25] = {AND, ZP0, 2, 3},
+    [0x2D] = {AND, ABS, 3, 4},
+    [0x35] = {AND, ZPX, 2, 4},
+    [0x3D] = {AND, ABX, 3, 4},
+    [0x39] = {AND, ABY, 3, 4},
+    [0x21] = {AND, IZX, 2, 6},
+    [0x31] = {AND, IZY, 2, 5},
 
-    [0x49] = {EOR, IMMEDIATE, 2, 2},
-    [0x45] = {EOR, ZERO_PAGE, 2, 3},
-    [0x4D] = {EOR, ABSOLUTE, 3, 4},
-    [0x55] = {EOR, ZERO_PAGE_X, 2, 4},
-    [0x5D] = {EOR, ABSOLUTE_X, 3, 4},
-    [0x59] = {EOR, ABSOLUTE_Y, 3, 4},
-    [0x41] = {EOR, INDEXED_INDIRECT, 2, 6},
-    [0x51] = {EOR, INDIRECT_INDEXED, 2, 5},
+    [0x49] = {EOR, IMM, 2, 2},
+    [0x45] = {EOR, ZP0, 2, 3},
+    [0x4D] = {EOR, ABS, 3, 4},
+    [0x55] = {EOR, ZPX, 2, 4},
+    [0x5D] = {EOR, ABX, 3, 4},
+    [0x59] = {EOR, ABY, 3, 4},
+    [0x41] = {EOR, IZX, 2, 6},
+    [0x51] = {EOR, IZY, 2, 5},
 
-    [0x09] = {ORA, IMMEDIATE, 2, 2},
-    [0x05] = {ORA, ZERO_PAGE, 2, 3},
-    [0x0D] = {ORA, ABSOLUTE, 3, 4},
-    [0x15] = {ORA, ZERO_PAGE_X, 2, 4},
-    [0x1D] = {ORA, ABSOLUTE_X, 3, 4},
-    [0x19] = {ORA, ABSOLUTE_Y, 3, 4},
-    [0x01] = {ORA, INDEXED_INDIRECT, 2, 6},
-    [0x11] = {ORA, INDIRECT_INDEXED, 2, 5},
+    [0x09] = {ORA, IMM, 2, 2},
+    [0x05] = {ORA, ZP0, 2, 3},
+    [0x0D] = {ORA, ABS, 3, 4},
+    [0x15] = {ORA, ZPX, 2, 4},
+    [0x1D] = {ORA, ABX, 3, 4},
+    [0x19] = {ORA, ABY, 3, 4},
+    [0x01] = {ORA, IZX, 2, 6},
+    [0x11] = {ORA, IZY, 2, 5},
 
-    [0x24] = {BIT, ZERO_PAGE, 2, 3},
-    [0x2C] = {BIT, ABSOLUTE, 3, 4},
+    [0x24] = {BIT, ZP0, 2, 3},
+    [0x2C] = {BIT, ABS, 3, 4},
 
     // Arithmetic Instructions
-    [0x69] = {ADC, IMMEDIATE, 2, 2},
-    [0x65] = {ADC, ZERO_PAGE, 2, 3},
-    [0x6D] = {ADC, ABSOLUTE, 3, 4},
-    [0x75] = {ADC, ZERO_PAGE_X, 2, 4},
-    [0x7D] = {ADC, ABSOLUTE_X, 3, 4},
-    [0x79] = {ADC, ABSOLUTE_Y, 3, 4},
-    [0x61] = {ADC, INDEXED_INDIRECT, 2, 6},
-    [0x71] = {ADC, INDIRECT_INDEXED, 2, 5},
+    [0x69] = {ADC, IMM, 2, 2},
+    [0x65] = {ADC, ZP0, 2, 3},
+    [0x6D] = {ADC, ABS, 3, 4},
+    [0x75] = {ADC, ZPX, 2, 4},
+    [0x7D] = {ADC, ABX, 3, 4},
+    [0x79] = {ADC, ABY, 3, 4},
+    [0x61] = {ADC, IZX, 2, 6},
+    [0x71] = {ADC, IZY, 2, 5},
 
-    [0xE9] = {SBC, IMMEDIATE, 2, 2},
-    [0xE5] = {SBC, ZERO_PAGE, 2, 3},
-    [0xED] = {SBC, ABSOLUTE, 3, 4},
-    [0xF5] = {SBC, ZERO_PAGE_X, 2, 4},
-    [0xFD] = {SBC, ABSOLUTE_X, 3, 4},
-    [0xF9] = {SBC, ABSOLUTE_Y, 3, 4},
-    [0xE1] = {SBC, INDEXED_INDIRECT, 2, 6},
-    [0xF1] = {SBC, INDIRECT_INDEXED, 2, 5},
+    [0xE9] = {SBC, IMM, 2, 2},
+    [0xE5] = {SBC, ZP0, 2, 3},
+    [0xED] = {SBC, ABS, 3, 4},
+    [0xF5] = {SBC, ZPX, 2, 4},
+    [0xFD] = {SBC, ABX, 3, 4},
+    [0xF9] = {SBC, ABY, 3, 4},
+    [0xE1] = {SBC, IZX, 2, 6},
+    [0xF1] = {SBC, IZY, 2, 5},
 
-    [0xC9] = {CMP, IMMEDIATE, 2, 2},
-    [0xC5] = {CMP, ZERO_PAGE, 2, 3},
-    [0xCD] = {CMP, ABSOLUTE, 3, 4},
-    [0xD5] = {CMP, ZERO_PAGE_X, 2, 4},
-    [0xDD] = {CMP, ABSOLUTE_X, 3, 4},
-    [0xD9] = {CMP, ABSOLUTE_Y, 3, 4},
-    [0xC1] = {CMP, INDEXED_INDIRECT, 2, 6},
-    [0xD1] = {CMP, INDIRECT_INDEXED, 2, 5},
+    [0xC9] = {CMP, IMM, 2, 2},
+    [0xC5] = {CMP, ZP0, 2, 3},
+    [0xCD] = {CMP, ABS, 3, 4},
+    [0xD5] = {CMP, ZPX, 2, 4},
+    [0xDD] = {CMP, ABX, 3, 4},
+    [0xD9] = {CMP, ABY, 3, 4},
+    [0xC1] = {CMP, IZX, 2, 6},
+    [0xD1] = {CMP, IZY, 2, 5},
 
-    [0xE0] = {CPX, IMMEDIATE, 2, 2},
-    [0xE4] = {CPX, ZERO_PAGE, 2, 3},
-    [0xEC] = {CPX, ABSOLUTE, 3, 4},
+    [0xE0] = {CPX, IMM, 2, 2},
+    [0xE4] = {CPX, ZP0, 2, 3},
+    [0xEC] = {CPX, ABS, 3, 4},
 
-    [0xC0] = {CPY, IMMEDIATE, 2, 2},
-    [0xC4] = {CPY, ZERO_PAGE, 2, 3},
-    [0xCC] = {CPY, ABSOLUTE, 3, 4},
+    [0xC0] = {CPY, IMM, 2, 2},
+    [0xC4] = {CPY, ZP0, 2, 3},
+    [0xCC] = {CPY, ABS, 3, 4},
 
     // Increments & Decrements
-    [0xE6] = {INC, ZERO_PAGE, 2, 5},
-    [0xEE] = {INC, ABSOLUTE, 3, 6},
-    [0xF6] = {INC, ZERO_PAGE_X, 2, 6},
-    [0xFE] = {INC, ABSOLUTE_X, 3, 7},
+    [0xE6] = {INC, ZP0, 2, 5},
+    [0xEE] = {INC, ABS, 3, 6},
+    [0xF6] = {INC, ZPX, 2, 6},
+    [0xFE] = {INC, ABX, 3, 7},
 
-    [0xE8] = {INX, IMPLIED, 1, 2},
-    [0xC8] = {INY, IMPLIED, 1, 2},
+    [0xE8] = {INX, IMP, 1, 2},
+    [0xC8] = {INY, IMP, 1, 2},
 
-    [0xC6] = {DEC, ZERO_PAGE, 2, 5},
-    [0xCE] = {DEC, ABSOLUTE, 3, 6},
-    [0xD6] = {DEC, ZERO_PAGE_X, 2, 6},
-    [0xDE] = {DEC, ABSOLUTE_X, 3, 7},
+    [0xC6] = {DEC, ZP0, 2, 5},
+    [0xCE] = {DEC, ABS, 3, 6},
+    [0xD6] = {DEC, ZPX, 2, 6},
+    [0xDE] = {DEC, ABX, 3, 7},
 
-    [0xCA] = {DEX, IMPLIED, 1, 2},
-    [0x88] = {DEY, IMPLIED, 1, 2},
+    [0xCA] = {DEX, IMP, 1, 2},
+    [0x88] = {DEY, IMP, 1, 2},
 
     // Shifts
-    [0x0A] = {ASL, ACCUMULATOR, 1, 2},
-    [0x06] = {ASL, ZERO_PAGE, 2, 5},
-    [0x0E] = {ASL, ABSOLUTE, 3, 6},
-    [0x16] = {ASL, ZERO_PAGE_X, 2, 6},
-    [0x1E] = {ASL, ABSOLUTE_X, 3, 7},
+    [0x0A] = {ASL, ACC, 1, 2},
+    [0x06] = {ASL, ZP0, 2, 5},
+    [0x0E] = {ASL, ABS, 3, 6},
+    [0x16] = {ASL, ZPX, 2, 6},
+    [0x1E] = {ASL, ABX, 3, 7},
 
-    [0x4A] = {LSR, ACCUMULATOR, 1, 2},
-    [0x46] = {LSR, ZERO_PAGE, 2, 5},
-    [0x4E] = {LSR, ABSOLUTE, 3, 6},
-    [0x56] = {LSR, ZERO_PAGE_X, 2, 6},
-    [0x5E] = {LSR, ABSOLUTE_X, 3, 7},
+    [0x4A] = {LSR, ACC, 1, 2},
+    [0x46] = {LSR, ZP0, 2, 5},
+    [0x4E] = {LSR, ABS, 3, 6},
+    [0x56] = {LSR, ZPX, 2, 6},
+    [0x5E] = {LSR, ABX, 3, 7},
 
-    [0x2A] = {ROL, ACCUMULATOR, 1, 2},
-    [0x26] = {ROL, ZERO_PAGE, 2, 5},
-    [0x2E] = {ROL, ABSOLUTE, 3, 6},
-    [0x36] = {ROL, ZERO_PAGE_X, 2, 6},
-    [0x3E] = {ROL, ABSOLUTE_X, 3, 7},
+    [0x2A] = {ROL, ACC, 1, 2},
+    [0x26] = {ROL, ZP0, 2, 5},
+    [0x2E] = {ROL, ABS, 3, 6},
+    [0x36] = {ROL, ZPX, 2, 6},
+    [0x3E] = {ROL, ABX, 3, 7},
 
-    [0x6A] = {ROR, ACCUMULATOR, 1, 2},
-    [0x66] = {ROR, ZERO_PAGE, 2, 5},
-    [0x6E] = {ROR, ABSOLUTE, 3, 6},
-    [0x76] = {ROR, ZERO_PAGE_X, 2, 6},
-    [0x7E] = {ROR, ABSOLUTE_X, 3, 7},
+    [0x6A] = {ROR, ACC, 1, 2},
+    [0x66] = {ROR, ZP0, 2, 5},
+    [0x6E] = {ROR, ABS, 3, 6},
+    [0x76] = {ROR, ZPX, 2, 6},
+    [0x7E] = {ROR, ABX, 3, 7},
 
     // Jumps & Calls
-    [0x4C] = {JMP, ABSOLUTE, 3, 3},
-    [0x6C] = {JMP, INDIRECT, 3, 5}, // Note: 6502 JMP indirect bug not handled here
-    [0x20] = {JSR, ABSOLUTE, 3, 6},
-    [0x60] = {RTS, IMPLIED, 1, 6},
+    [0x4C] = {JMP, ABS, 3, 3},
+    [0x6C] = {JMP, IND, 3, 5}, // Note: 6502 JMP indirect bug not handled here
+    [0x20] = {JSR, ABS, 3, 6},
+    [0x60] = {RTS, IMP, 1, 6},
 
     // Branches
-    [0x90] = {BCC, RELATIVE, 2, 2},
-    [0xB0] = {BCS, RELATIVE, 2, 2},
-    [0xF0] = {BEQ, RELATIVE, 2, 2},
-    [0x30] = {BMI, RELATIVE, 2, 2},
-    [0xD0] = {BNE, RELATIVE, 2, 2},
-    [0x10] = {BPL, RELATIVE, 2, 2},
-    [0x50] = {BVC, RELATIVE, 2, 2},
-    [0x70] = {BVS, RELATIVE, 2, 2},
+    [0x90] = {BCC, REL, 2, 2},
+    [0xB0] = {BCS, REL, 2, 2},
+    [0xF0] = {BEQ, REL, 2, 2},
+    [0x30] = {BMI, REL, 2, 2},
+    [0xD0] = {BNE, REL, 2, 2},
+    [0x10] = {BPL, REL, 2, 2},
+    [0x50] = {BVC, REL, 2, 2},
+    [0x70] = {BVS, REL, 2, 2},
 
     // Status Flag Changes
-    [0x18] = {CLC, IMPLIED, 1, 2},
-    [0xD8] = {CLD, IMPLIED, 1, 2},
-    [0x58] = {CLI, IMPLIED, 1, 2},
-    [0xB8] = {CLV, IMPLIED, 1, 2},
-    [0x38] = {SEC, IMPLIED, 1, 2},
-    [0xF8] = {SED, IMPLIED, 1, 2},
-    [0x78] = {SEI, IMPLIED, 1, 2},
+    [0x18] = {CLC, IMP, 1, 2},
+    [0xD8] = {CLD, IMP, 1, 2},
+    [0x58] = {CLI, IMP, 1, 2},
+    [0xB8] = {CLV, IMP, 1, 2},
+    [0x38] = {SEC, IMP, 1, 2},
+    [0xF8] = {SED, IMP, 1, 2},
+    [0x78] = {SEI, IMP, 1, 2},
 
     // System Functions
-    [0x00] = {BRK, IMPLIED, 1, 7},
-    [0xEA] = {NOP, IMPLIED, 1, 2},
-    [0x40] = {RTI, IMPLIED, 1, 6},
+    [0x00] = {BRK, IMP, 1, 7},
+    [0xEA] = {NOP, IMP, 1, 2},
+    [0x40] = {RTI, IMP, 1, 6},
 };
 
 // Define mapped 'Instruction' string names
@@ -272,19 +275,19 @@ const char *InstructionStrings[56] = {
 
 // Define mapped 'Addressing Modes' string names
 const char *AddressModeStrings[13] = {
-    "IMMEDIATE",
-    "ZERO_PAGE",
-    "ABSOLUTE",
-    "ZERO_PAGE_X",
-    "ZERO_PAGE_Y",
-    "ABSOLUTE_X",
-    "ABSOLUTE_Y",
-    "INDEXED_INDIRECT",
-    "INDIRECT_INDEXED",
-    "ACCUMULATOR",
-    "IMPLIED",
-    "RELATIVE",
-    "INDIRECT"
+    "IMM",
+    "ZP0",
+    "ABS",
+    "ZPX",
+    "ZPY",
+    "ABX",
+    "ABY",
+    "IZX",
+    "IZY",
+    "ACC",
+    "IMP",
+    "REL",
+    "IND"
 };
 
 
@@ -292,34 +295,34 @@ const char *AddressModeStrings[13] = {
 uint8_t fetch_operand(Cpu* cpu, AddressingMode mode, uint16_t* address) {
     uint8_t value = 0;
     switch (mode) {
-        case IMMEDIATE:
+        case IMM:
             value = bus_read(cpu->bus, cpu->PC++);
             break;
-        case ZERO_PAGE:
+        case ZP0:
             *address = bus_read(cpu->bus, cpu->PC++);
             value = bus_read(cpu->bus, *address);
             break;
-        case ZERO_PAGE_X:
+        case ZPX:
             *address = (bus_read(cpu->bus, cpu->PC++) + cpu->X) & 0xFF;
             value = bus_read(cpu->bus, *address);
             break;
-        case ZERO_PAGE_Y:
+        case ZPY:
             *address = (bus_read(cpu->bus, cpu->PC++) + cpu->Y) & 0xFF;
             value = bus_read(cpu->bus, *address);
             break;
-        case ABSOLUTE:
+        case ABS:
             *address = bus_read(cpu->bus, cpu->PC++) | (bus_read(cpu->bus, cpu->PC++) << 8);
             value = bus_read(cpu->bus, *address);
             break;
-        case ABSOLUTE_X:
+        case ABX:
             *address = (bus_read(cpu->bus, cpu->PC++) | (bus_read(cpu->bus, cpu->PC++) << 8)) + cpu->X;
             value = bus_read(cpu->bus, *address);
             break;
-        case ABSOLUTE_Y:
+        case ABY:
             *address = (bus_read(cpu->bus, cpu->PC++) | (bus_read(cpu->bus, cpu->PC++) << 8)) + cpu->Y;
             value = bus_read(cpu->bus, *address);
             break;
-        case INDEXED_INDIRECT:
+        case IZX:
             {
                 uint8_t zp = bus_read(cpu->bus, cpu->PC++);
                 uint16_t addr = (zp + cpu->X) & 0xFF;
@@ -327,7 +330,7 @@ uint8_t fetch_operand(Cpu* cpu, AddressingMode mode, uint16_t* address) {
                 value = bus_read(cpu->bus, *address);
             }
             break;
-        case INDIRECT_INDEXED:
+        case IZY:
             {
                 uint8_t zp = bus_read(cpu->bus, cpu->PC++);
                 uint16_t base = bus_read(cpu->bus, zp) | (bus_read(cpu->bus, (zp + 1) & 0xFF) << 8);
@@ -335,7 +338,7 @@ uint8_t fetch_operand(Cpu* cpu, AddressingMode mode, uint16_t* address) {
                 value = bus_read(cpu->bus, *address);
             }
             break;
-        case RELATIVE:
+        case REL:
             {
                 int8_t offset = (int8_t)bus_read(cpu->bus, cpu->PC++);
                 // Note: Branch instructions handle the PC update
@@ -343,10 +346,10 @@ uint8_t fetch_operand(Cpu* cpu, AddressingMode mode, uint16_t* address) {
                 *address = cpu->PC + offset;
             }
             break;
-        case ACCUMULATOR:
+        case ACC:
             // No operand to fetch
             break;
-        case IMPLIED:
+        case IMP:
             // No operand to fetch
             break;
         default:
@@ -445,6 +448,7 @@ Cpu* init_cpu(Bus* bus) {
     return cpu;
 }
 
+// Print the state of the CPU (registers)
 void print_cpu(Cpu* cpu) {
     printf("|  A:%02x |  X:%02x |  Y:%02x |  SP:%04x |  PC:%04x |\n", cpu->A, cpu->X, cpu->Y, cpu->SP, cpu->PC);
     printf("| C:%01x | Z:%01x | I:%01x | D:%01x | B:%01x | - | O:%01x | N:%01x |\n", (cpu->STATUS >> 0) & 1,
@@ -457,6 +461,7 @@ void print_cpu(Cpu* cpu) {
     printf("\n");
 }
 
+// Print the current instruction being executed
 void print_instruction(Cpu* cpu, Opcode c, uint8_t n) {
     // PC ADDR | INSTRUCTION | VALUE? (value of PC + 1) | ADDRESSING MODE
     if (strcmp(InstructionStrings[c.instruction], "BCC") == 0 || 
@@ -481,6 +486,43 @@ void print_instruction(Cpu* cpu, Opcode c, uint8_t n) {
     }
 }
 
+// Helper function to get current time in nanoseconds
+uint64_t get_time_ns() {
+    // ASSUMING WINDOWS (NTS: WOULD LIKE TO ADD COMPILER SUPPORT FOR LINUX LATER)
+    LARGE_INTEGER frequency;
+    LARGE_INTEGER counter;
+    if (!QueryPerformanceFrequency(&frequency)) {
+        fprintf(stderr, "QueryPerformanceFrequency failed!\n");
+        return 0;
+    }
+    if (!QueryPerformanceCounter(&counter)) {
+        fprintf(stderr, "QueryPerformanceCounter failed!\n");
+        return 0;
+    }
+    return (uint64_t)((counter.QuadPart * 1000000000LL) / frequency.QuadPart);
+}
+
+// Cross-platform sleep function in microseconds
+void sleep_microseconds(uint64_t microseconds) {
+    // AGAIN, ASSUMING WINDOWS (NTS: WOULD LIKE TO ADD COMPILER SUPPORT FOR LINUX LATER)
+    if (microseconds >= 1000) {
+        // Sleep for the integer part of milliseconds
+        DWORD millis = (DWORD)(microseconds / 1000);
+        Sleep(millis);
+    }
+
+    // Busy-wait for the remaining microseconds
+    LARGE_INTEGER frequency;
+    LARGE_INTEGER start, current;
+    QueryPerformanceFrequency(&frequency);
+    QueryPerformanceCounter(&start);
+    double wait_time = (double)(microseconds % 1000) / 1000000.0; // Convert to seconds
+
+    do {
+        QueryPerformanceCounter(&current);
+    } while (((double)(current.QuadPart - start.QuadPart) / frequency.QuadPart) < wait_time);
+}
+
 // Main CPU Execution Loop
 void run_cpu(Cpu* cpu) {
     int i = 0;
@@ -491,32 +533,50 @@ void run_cpu(Cpu* cpu) {
     printf("Current CPU State:\n");
     print_cpu(cpu);
 
-    while (cpu->running) {
-        printf("\n");
-        printf("CPU Cycles left: %d\n", cpu->cycles_left);
+    /* Frequency Cycle Accurate Implementation:
+        1. At the start of a frame (when cycles_left == 0), reset cycle count to cycles per frame as defined
+        2. Run instructions indifinitely in a loop until cycles_left == 0
+        3. Calculate how long that took to reach 0, and sleep for any remaining time to maintain 60fps (60Hz)
+        4. Repeat
+    */
+    bool run_debug = false;
+    bool run_capped = false;
+    int capped_value = 50;
 
-        if (cpu->cycles_left == 0) {
+
+    // Initialize frame timing
+    uint64_t desired_frame_time_ns = 1000000000ULL / FRAMES_PERSEC; // ~16,666,667 ns/frame
+    uint64_t frame_start_time_ns = get_time_ns();
+    cpu->cycles_left = CYCLES_PER_FRAME;
+    
+    while (cpu->running) {
+        if (cpu->cycles_left > 0) {
+            if (run_debug) {
+                // Debug: Cycles left before next frame
+                printf("\n");
+                printf("CPU Cycles left: %d\n", cpu->cycles_left);
+            }
+            
             // Here we can optionally cap the program at a number of instructions 
             // in order to save time while needing to test with large instruction sequences
             // without having to step 1 by 1.
             // Default = Initially disabled with an example value of 50
-            bool run_capped = false;
-            int capped_value = 50;
             if (run_capped && cpu->A == capped_value) {
                 exit(0);
             }
             
             // Here we allow instruction stepping using the ENTER key
-            int c  = getchar();
-            while (c != '\n' && c != EOF) {
-                c = getchar();
-            }
+            // int c  = getchar();
+            // while (c != '\n' && c != EOF) {
+            //     c = getchar();
+            // }
 
             uint8_t opcode = bus_read(cpu->bus, cpu->PC++);
             Opcode current_opcode = opcode_table[opcode];
             uint8_t next_opcode = bus_read(cpu->bus, cpu->PC++);
             cpu->PC--;  // We increment the PC to read the next opcode, so we need to go back (I hate this...)
 
+            // NOTE: cpu->cycles_left is decremented within the instruction handlers, happy days!
             switch (current_opcode.instruction) {
                 case LDA:
                     handle_LDA(cpu, opcode);
@@ -693,25 +753,51 @@ void run_cpu(Cpu* cpu) {
                     break;
             }
 
-            printf("CPU: Instruction %d: \n", i+1);
-            printf("Current Opcode: %02x\n", opcode);
-            printf("\n");
-            print_instruction(cpu, current_opcode, next_opcode);
-            printf("\n");
-            print_cpu(cpu);
-
-            i++;
-
-            // Future Note to self: Interrupts, etc might need to be handled/implemented.
+            if (run_debug) {
+                printf("CPU: Instruction %d: \n", i);
+                printf("Current Opcode: %02x\n", opcode);
+                printf("\n");
+                print_instruction(cpu, current_opcode, next_opcode);
+                printf("\n");
+                print_cpu(cpu);
+            }
 
         } else {
-            // If there are cpu cycles left, decrease by one and continue the run state
-            // NOTE: When there are 0 cycles left, the next instruction will be called, 
-            // with more cycles to come and so on.
-            cpu->cycles_left--;
+            // Check how long below a second those 25,166 cycles took, sleep for rest until 1 sec
+            // Stop timer
+            uint64_t frame_end_time_ns = get_time_ns();
+            uint64_t elapsed_time_ns = frame_end_time_ns - frame_start_time_ns;
+
+            // NOTE: cycles_left is already decremented by the instruction handlers!
+            // Calculate now long that prev 'frame' took (assuming not on instruction 0... if so, we skip this consideration)
+            // Frame count is incremented for each frame after frame 0
+            i++;
+
+            // Check difference between timer value and 1 second
+            int64_t sleep_time_ns = desired_frame_time_ns - elapsed_time_ns;
+
+            // Sleep for that (millisecond format) difference
+            if (sleep_time_ns > 0) {
+                // Convert nanoseconds to microseconds for sleep_microseconds
+                uint64_t sleep_time_us = sleep_time_ns / 1000;
+                if ((i % 60) == 0) {
+                    printf("CPU: Frame %d - Slept for %d microseconds to retain clock speed.\n", i, sleep_time_us);
+                }
+                sleep_microseconds(sleep_time_us);
+            } else {
+                // Frame took longer than desired; consider logging or handling lag
+                printf("CPU: Warning: Frame %d is lagging by %lld ns.\n", i, -sleep_time_ns);
+            }
+
+            // Start timer for frame-time
+            frame_start_time_ns = get_time_ns();
+            
+            // Reset cycles_left to 28.166 (Cycles/frame based on 2A03 at 60Hz)
+            cpu->cycles_left = CYCLES_PER_FRAME;
         }
     }
 }
+
 
 static inline bool page_crossed(uint16_t old_addr, uint16_t new_addr) {
     return ((old_addr & 0xFF00) != (new_addr & 0xFF00));
@@ -719,7 +805,7 @@ static inline bool page_crossed(uint16_t old_addr, uint16_t new_addr) {
 
 
 void handle_LDA(Cpu* cpu, uint8_t opcode) {
-    cpu->cycles_left += opcode_table[opcode].cycles; 
+    cpu->cycles_left -= opcode_table[opcode].cycles; 
     uint16_t address = 0;
     AddressingMode mode = opcode_table[opcode].addressing_mode;
     uint8_t value = fetch_operand(cpu, mode, &address);
@@ -727,22 +813,22 @@ void handle_LDA(Cpu* cpu, uint8_t opcode) {
     set_zero_flag(cpu, cpu->A);
     set_negative_flag(cpu, cpu->A);
 
-    // If ABSOLUTE_X or ABSOLUTE_Y, check page crossing
-    if (mode == ABSOLUTE_X) {
+    // If ABX or ABY, check page crossing
+    if (mode == ABX) {
         uint16_t base = address - cpu->X;
         if (page_crossed(base, address)) {
-            cpu->cycles_left += 1;
+            cpu->cycles_left -= 1;
         }
-    } else if (mode == ABSOLUTE_Y) {
+    } else if (mode == ABY) {
         uint16_t base = address - cpu->Y;
         if (page_crossed(base, address)) {
-            cpu->cycles_left += 1;
+            cpu->cycles_left -= 1;
         }
     }
 }
 
 void handle_LDX(Cpu* cpu, uint8_t opcode) {
-    cpu->cycles_left += opcode_table[opcode].cycles;
+    cpu->cycles_left -= opcode_table[opcode].cycles;
     uint16_t address = 0;
     AddressingMode mode = opcode_table[opcode].addressing_mode;
     uint8_t value = fetch_operand(cpu, mode, &address);
@@ -750,17 +836,17 @@ void handle_LDX(Cpu* cpu, uint8_t opcode) {
     set_zero_flag(cpu, cpu->X);
     set_negative_flag(cpu, cpu->X);
 
-    // LDX uses ABSOLUTE_Y for page crossing check
-    if (mode == ABSOLUTE_Y) {
+    // LDX uses ABY for page crossing check
+    if (mode == ABY) {
         uint16_t base = address - cpu->Y;
         if (page_crossed(base, address)) {
-            cpu->cycles_left += 1;
+            cpu->cycles_left -= 1;
         }
     }
 }
 
 void handle_LDY(Cpu* cpu, uint8_t opcode) {
-    cpu->cycles_left += opcode_table[opcode].cycles;
+    cpu->cycles_left -= opcode_table[opcode].cycles;
     uint16_t address = 0;
     AddressingMode mode = opcode_table[opcode].addressing_mode;
     uint8_t value = fetch_operand(cpu, mode, &address);
@@ -768,67 +854,67 @@ void handle_LDY(Cpu* cpu, uint8_t opcode) {
     set_zero_flag(cpu, cpu->Y);
     set_negative_flag(cpu, cpu->Y);
 
-    // LDY uses ABSOLUTE_X for page crossing check
-    if (mode == ABSOLUTE_X) {
+    // LDY uses ABX for page crossing check
+    if (mode == ABX) {
         uint16_t base = address - cpu->X;
         if (page_crossed(base, address)) {
-            cpu->cycles_left += 1;
+            cpu->cycles_left -= 1;
         }
     }
 }
 
 void handle_STA(Cpu* cpu, uint8_t opcode) {
-    cpu->cycles_left += opcode_table[opcode].cycles; 
+    cpu->cycles_left -= opcode_table[opcode].cycles; 
     uint16_t address = 0;
     AddressingMode mode = opcode_table[opcode].addressing_mode;
 
     // Address calculation
     switch(mode) {
-        case ZERO_PAGE:
+        case ZP0:
             address = bus_read(cpu->bus, cpu->PC++);
             break;
-        case ZERO_PAGE_X:
+        case ZPX:
             {
                 uint8_t zp = bus_read(cpu->bus, cpu->PC++);
                 address = (zp + cpu->X) & 0xFF;
             }
             break;
-        case ZERO_PAGE_Y:
+        case ZPY:
             {
                 uint8_t zp = bus_read(cpu->bus, cpu->PC++);
                 address = (zp + cpu->Y) & 0xFF;
             }
             break;
-        case ABSOLUTE:
+        case ABS:
             address = bus_read(cpu->bus, cpu->PC++) | (bus_read(cpu->bus, cpu->PC++) << 8);
             break;
-        case ABSOLUTE_X:
+        case ABX:
             {
                 uint16_t base = bus_read(cpu->bus, cpu->PC++) | (bus_read(cpu->bus, cpu->PC++) << 8);
                 address = base + cpu->X;
                 // STA does NOT add a cycle for crossing in standard 6502 behavior
             }
             break;
-        case ABSOLUTE_Y:
+        case ABY:
             {
                 uint16_t base = bus_read(cpu->bus, cpu->PC++) | (bus_read(cpu->bus, cpu->PC++) << 8);
                 address = base + cpu->Y;
                 // STA does NOT add a cycle for crossing
             }
             break;
-        case INDEXED_INDIRECT:
+        case IZX:
             {
                 uint8_t zp = bus_read(cpu->bus, cpu->PC++);
                 uint16_t ptr = (zp + cpu->X) & 0xFF;
                 address = bus_read(cpu->bus, ptr) | (bus_read(cpu->bus, (ptr + 1) & 0xFF) << 8);
             }
             break;
-        case INDIRECT_INDEXED:
+        case IZY:
             {
                 uint8_t zp = bus_read(cpu->bus, cpu->PC++);
                 uint16_t base = bus_read(cpu->bus, zp) | (bus_read(cpu->bus, (zp + 1) & 0xFF) << 8);
                 address = base + cpu->Y;
-                // STA (INDIRECT_INDEXED) does not add cycle for crossing
+                // STA (IZY) does not add cycle for crossing
             }
             break;
         default:
@@ -841,21 +927,21 @@ void handle_STA(Cpu* cpu, uint8_t opcode) {
 }
 
 void handle_STX(Cpu* cpu, uint8_t opcode) {
-    cpu->cycles_left += opcode_table[opcode].cycles; 
+    cpu->cycles_left -= opcode_table[opcode].cycles; 
     uint16_t address = 0;
     AddressingMode mode = opcode_table[opcode].addressing_mode;
 
     switch(mode) {
-        case ZERO_PAGE:
+        case ZP0:
             address = bus_read(cpu->bus, cpu->PC++);
             break;
-        case ZERO_PAGE_Y:
+        case ZPY:
             {
                 uint8_t zp = bus_read(cpu->bus, cpu->PC++);
                 address = (zp + cpu->Y) & 0xFF;
             }
             break;
-        case ABSOLUTE:
+        case ABS:
             address = bus_read(cpu->bus, cpu->PC++) | (bus_read(cpu->bus, cpu->PC++) << 8);
             break;
         default:
@@ -868,21 +954,21 @@ void handle_STX(Cpu* cpu, uint8_t opcode) {
 }
 
 void handle_STY(Cpu* cpu, uint8_t opcode) {
-    cpu->cycles_left += opcode_table[opcode].cycles; 
+    cpu->cycles_left -= opcode_table[opcode].cycles; 
     uint16_t address = 0;
     AddressingMode mode = opcode_table[opcode].addressing_mode;
 
     switch(mode) {
-        case ZERO_PAGE:
+        case ZP0:
             address = bus_read(cpu->bus, cpu->PC++);
             break;
-        case ZERO_PAGE_X:
+        case ZPX:
             {
                 uint8_t zp = bus_read(cpu->bus, cpu->PC++);
                 address = (zp + cpu->X) & 0xFF;
             }
             break;
-        case ABSOLUTE:
+        case ABS:
             address = bus_read(cpu->bus, cpu->PC++) | (bus_read(cpu->bus, cpu->PC++) << 8);
             break;
         default:
@@ -895,71 +981,71 @@ void handle_STY(Cpu* cpu, uint8_t opcode) {
 }
 
 void handle_TAX(Cpu* cpu, uint8_t opcode) {
-    cpu->cycles_left += opcode_table[opcode].cycles;
+    cpu->cycles_left -= opcode_table[opcode].cycles;
     cpu->X = cpu->A;
     set_zero_flag(cpu, cpu->X);
     set_negative_flag(cpu, cpu->X);
 }
 
 void handle_TAY(Cpu* cpu, uint8_t opcode) {
-    cpu->cycles_left += opcode_table[opcode].cycles;
+    cpu->cycles_left -= opcode_table[opcode].cycles;
     cpu->Y = cpu->A;
     set_zero_flag(cpu, cpu->Y);
     set_negative_flag(cpu, cpu->Y);
 }
 
 void handle_TXA(Cpu* cpu, uint8_t opcode) {
-    cpu->cycles_left += opcode_table[opcode].cycles;
+    cpu->cycles_left -= opcode_table[opcode].cycles;
     cpu->A = cpu->X;
     set_zero_flag(cpu, cpu->A);
     set_negative_flag(cpu, cpu->A);
 }
 
 void handle_TYA(Cpu* cpu, uint8_t opcode) {
-    cpu->cycles_left += opcode_table[opcode].cycles;
+    cpu->cycles_left -= opcode_table[opcode].cycles;
     cpu->A = cpu->Y;
     set_zero_flag(cpu, cpu->A);
     set_negative_flag(cpu, cpu->A);
 }
 
 void handle_TSX(Cpu* cpu, uint8_t opcode) {
-    cpu->cycles_left += opcode_table[opcode].cycles;
+    cpu->cycles_left -= opcode_table[opcode].cycles;
     cpu->X = cpu->SP;
     set_zero_flag(cpu, cpu->X);
     set_negative_flag(cpu, cpu->X);
 }
 
 void handle_TXS(Cpu* cpu, uint8_t opcode) {
-    cpu->cycles_left += opcode_table[opcode].cycles;
+    cpu->cycles_left -= opcode_table[opcode].cycles;
     cpu->SP = cpu->X;
 }
 
 void handle_PHA(Cpu* cpu, uint8_t opcode) {
-    cpu->cycles_left += opcode_table[opcode].cycles;
+    cpu->cycles_left -= opcode_table[opcode].cycles;
     push_stack(cpu, cpu->A);
 }
 
 void handle_PHP(Cpu* cpu, uint8_t opcode) {
-    cpu->cycles_left += opcode_table[opcode].cycles;
+    cpu->cycles_left -= opcode_table[opcode].cycles;
     uint8_t status = cpu->STATUS | FLAG_BREAK | FLAG_UNUSED;
     push_stack(cpu, status);
 }
 
 void handle_PLA(Cpu* cpu, uint8_t opcode) {
-    cpu->cycles_left += opcode_table[opcode].cycles;
+    cpu->cycles_left -= opcode_table[opcode].cycles;
     cpu->A = pull_stack(cpu);
     set_zero_flag(cpu, cpu->A);
     set_negative_flag(cpu, cpu->A);
 }
 
 void handle_PLP(Cpu* cpu, uint8_t opcode) {
-    cpu->cycles_left += opcode_table[opcode].cycles;
+    cpu->cycles_left -= opcode_table[opcode].cycles;
     cpu->STATUS = pull_stack(cpu);
     cpu->STATUS |= FLAG_UNUSED;
 }
 
 void handle_AND(Cpu* cpu, uint8_t opcode) {
-    cpu->cycles_left += opcode_table[opcode].cycles;
+    cpu->cycles_left -= opcode_table[opcode].cycles;
     uint16_t address = 0;
     AddressingMode mode = opcode_table[opcode].addressing_mode;
     uint8_t value = fetch_operand(cpu, mode, &address);
@@ -967,18 +1053,18 @@ void handle_AND(Cpu* cpu, uint8_t opcode) {
     set_zero_flag(cpu, cpu->A);
     set_negative_flag(cpu, cpu->A);
 
-    // Check page crossing if ABSOLUTE_X or ABSOLUTE_Y
-    if (mode == ABSOLUTE_X) {
+    // Check page crossing if ABX or ABY
+    if (mode == ABX) {
         uint16_t base = address - cpu->X;
-        if (page_crossed(base, address)) cpu->cycles_left += 1;
-    } else if (mode == ABSOLUTE_Y) {
+        if (page_crossed(base, address)) cpu->cycles_left -= 1;
+    } else if (mode == ABY) {
         uint16_t base = address - cpu->Y;
-        if (page_crossed(base, address)) cpu->cycles_left += 1;
+        if (page_crossed(base, address)) cpu->cycles_left -= 1;
     }
 }
 
 void handle_EOR(Cpu* cpu, uint8_t opcode) {
-    cpu->cycles_left += opcode_table[opcode].cycles;
+    cpu->cycles_left -= opcode_table[opcode].cycles;
     uint16_t address = 0;
     AddressingMode mode = opcode_table[opcode].addressing_mode;
     uint8_t value = fetch_operand(cpu, mode, &address);
@@ -986,17 +1072,17 @@ void handle_EOR(Cpu* cpu, uint8_t opcode) {
     set_zero_flag(cpu, cpu->A);
     set_negative_flag(cpu, cpu->A);
 
-    if (mode == ABSOLUTE_X) {
+    if (mode == ABX) {
         uint16_t base = address - cpu->X;
-        if (page_crossed(base, address)) cpu->cycles_left += 1;
-    } else if (mode == ABSOLUTE_Y) {
+        if (page_crossed(base, address)) cpu->cycles_left -= 1;
+    } else if (mode == ABY) {
         uint16_t base = address - cpu->Y;
-        if (page_crossed(base, address)) cpu->cycles_left += 1;
+        if (page_crossed(base, address)) cpu->cycles_left -= 1;
     }
 }
 
 void handle_ORA(Cpu* cpu, uint8_t opcode) {
-    cpu->cycles_left += opcode_table[opcode].cycles;
+    cpu->cycles_left -= opcode_table[opcode].cycles;
     uint16_t address = 0;
     AddressingMode mode = opcode_table[opcode].addressing_mode;
     uint8_t value = fetch_operand(cpu, mode, &address);
@@ -1004,17 +1090,17 @@ void handle_ORA(Cpu* cpu, uint8_t opcode) {
     set_zero_flag(cpu, cpu->A);
     set_negative_flag(cpu, cpu->A);
 
-    if (mode == ABSOLUTE_X) {
+    if (mode == ABX) {
         uint16_t base = address - cpu->X;
-        if (page_crossed(base, address)) cpu->cycles_left += 1;
-    } else if (mode == ABSOLUTE_Y) {
+        if (page_crossed(base, address)) cpu->cycles_left -= 1;
+    } else if (mode == ABY) {
         uint16_t base = address - cpu->Y;
-        if (page_crossed(base, address)) cpu->cycles_left += 1;
+        if (page_crossed(base, address)) cpu->cycles_left -= 1;
     }
 }
 
 void handle_BIT(Cpu* cpu, uint8_t opcode) {
-    cpu->cycles_left += opcode_table[opcode].cycles;
+    cpu->cycles_left -= opcode_table[opcode].cycles;
     uint16_t address = 0;
     uint8_t value = fetch_operand(cpu, opcode_table[opcode].addressing_mode, &address);
     uint8_t result = cpu->A & value;
@@ -1029,7 +1115,7 @@ void handle_BIT(Cpu* cpu, uint8_t opcode) {
 }
 
 void handle_ADC(Cpu* cpu, uint8_t opcode) {
-    cpu->cycles_left += opcode_table[opcode].cycles;
+    cpu->cycles_left -= opcode_table[opcode].cycles;
     AddressingMode mode = opcode_table[opcode].addressing_mode;
     uint16_t address = 0;
     uint8_t value = fetch_operand(cpu, mode, &address);
@@ -1042,17 +1128,17 @@ void handle_ADC(Cpu* cpu, uint8_t opcode) {
     set_zero_flag(cpu, cpu->A);
     set_negative_flag(cpu, cpu->A);
 
-    if (mode == ABSOLUTE_X) {
+    if (mode == ABX) {
         uint16_t base = address - cpu->X;
-        if (page_crossed(base, address)) cpu->cycles_left += 1;
-    } else if (mode == ABSOLUTE_Y) {
+        if (page_crossed(base, address)) cpu->cycles_left -= 1;
+    } else if (mode == ABY) {
         uint16_t base = address - cpu->Y;
-        if (page_crossed(base, address)) cpu->cycles_left += 1;
+        if (page_crossed(base, address)) cpu->cycles_left -= 1;
     }
 }
 
 void handle_SBC(Cpu* cpu, uint8_t opcode) {
-    cpu->cycles_left += opcode_table[opcode].cycles;
+    cpu->cycles_left -= opcode_table[opcode].cycles;
     AddressingMode mode = opcode_table[opcode].addressing_mode;
     uint16_t address = 0;
     uint8_t value = fetch_operand(cpu, mode, &address);
@@ -1066,58 +1152,58 @@ void handle_SBC(Cpu* cpu, uint8_t opcode) {
     set_zero_flag(cpu, cpu->A);
     set_negative_flag(cpu, cpu->A);
 
-    if (mode == ABSOLUTE_X) {
+    if (mode == ABX) {
         uint16_t base = address - cpu->X;
-        if (page_crossed(base, address)) cpu->cycles_left += 1;
-    } else if (mode == ABSOLUTE_Y) {
+        if (page_crossed(base, address)) cpu->cycles_left -= 1;
+    } else if (mode == ABY) {
         uint16_t base = address - cpu->Y;
-        if (page_crossed(base, address)) cpu->cycles_left += 1;
+        if (page_crossed(base, address)) cpu->cycles_left -= 1;
     }
 }
 
 void handle_CMP(Cpu* cpu, uint8_t opcode) {
-    cpu->cycles_left += opcode_table[opcode].cycles;
+    cpu->cycles_left -= opcode_table[opcode].cycles;
     AddressingMode mode = opcode_table[opcode].addressing_mode;
     uint16_t address = 0;
     uint8_t value = fetch_operand(cpu, mode, &address);
     uint16_t result = cpu->A - value;
     set_carry_flag(cpu, cpu->A >= value);
-    set_zero_flag(cpu, result & 0xFF);
-    set_negative_flag(cpu, result & 0xFF);
+    set_zero_flag(cpu, (result & 0xFF) == 0);
+    set_negative_flag(cpu, (result & 0x80) != 0);
 
-    if (mode == ABSOLUTE_X) {
+    if (mode == ABX) {
         uint16_t base = address - cpu->X;
-        if (page_crossed(base, address)) cpu->cycles_left += 1;
-    } else if (mode == ABSOLUTE_Y) {
+        if (page_crossed(base, address)) cpu->cycles_left -= 1;
+    } else if (mode == ABY) {
         uint16_t base = address - cpu->Y;
-        if (page_crossed(base, address)) cpu->cycles_left += 1;
+        if (page_crossed(base, address)) cpu->cycles_left -= 1;
     }
 }
 
 void handle_CPX(Cpu* cpu, uint8_t opcode) {
-    cpu->cycles_left += opcode_table[opcode].cycles;
-    // CPX does not have ABSOLUTE_X or ABSOLUTE_Y modes
+    cpu->cycles_left -= opcode_table[opcode].cycles;
+    // CPX does not have ABX or ABY modes
     uint16_t address = 0;
     uint8_t value = fetch_operand(cpu, opcode_table[opcode].addressing_mode, &address);
     uint16_t result = cpu->X - value;
     set_carry_flag(cpu, cpu->X >= value);
-    set_zero_flag(cpu, result & 0xFF);
-    set_negative_flag(cpu, result & 0xFF);
+    set_zero_flag(cpu, (result & 0xFF) == 0);
+    set_negative_flag(cpu, (result & 0x80) != 0);
 }
 
 void handle_CPY(Cpu* cpu, uint8_t opcode) {
-    cpu->cycles_left += opcode_table[opcode].cycles;
-    // CPY does not have ABSOLUTE_X or ABSOLUTE_Y modes
+    cpu->cycles_left -= opcode_table[opcode].cycles;
+    // CPY does not have ABX or ABY modes
     uint16_t address = 0;
     uint8_t value = fetch_operand(cpu, opcode_table[opcode].addressing_mode, &address);
     uint16_t result = cpu->Y - value;
     set_carry_flag(cpu, cpu->Y >= value);
-    set_zero_flag(cpu, result & 0xFF);
-    set_negative_flag(cpu, result & 0xFF);
+    set_zero_flag(cpu, (result & 0xFF) == 0);
+    set_negative_flag(cpu, (result & 0x80) != 0);
 }
 
 void handle_INC(Cpu* cpu, uint8_t opcode) {
-    cpu->cycles_left += opcode_table[opcode].cycles;
+    cpu->cycles_left -= opcode_table[opcode].cycles;
     AddressingMode mode = opcode_table[opcode].addressing_mode;
     uint16_t address = 0;
     uint8_t value = fetch_operand(cpu, mode, &address);
@@ -1126,28 +1212,28 @@ void handle_INC(Cpu* cpu, uint8_t opcode) {
     set_zero_flag(cpu, value);
     set_negative_flag(cpu, value);
 
-    if (mode == ABSOLUTE_X) {
+    if (mode == ABX) {
         uint16_t base = address - cpu->X;
-        if (page_crossed(base, address)) cpu->cycles_left += 1;
+        if (page_crossed(base, address)) cpu->cycles_left -= 1;
     }
 }
 
 void handle_INX(Cpu* cpu, uint8_t opcode) {
-    cpu->cycles_left += opcode_table[opcode].cycles;
+    cpu->cycles_left -= opcode_table[opcode].cycles;
     cpu->X++;
     set_zero_flag(cpu, cpu->X);
     set_negative_flag(cpu, cpu->X);
 }
 
 void handle_INY(Cpu* cpu, uint8_t opcode) {
-    cpu->cycles_left += opcode_table[opcode].cycles;
+    cpu->cycles_left -= opcode_table[opcode].cycles;
     cpu->Y++;
     set_zero_flag(cpu, cpu->Y);
     set_negative_flag(cpu, cpu->Y);
 }
 
 void handle_DEC(Cpu* cpu, uint8_t opcode) {
-    cpu->cycles_left += opcode_table[opcode].cycles;
+    cpu->cycles_left -= opcode_table[opcode].cycles;
     AddressingMode mode = opcode_table[opcode].addressing_mode;
     uint16_t address = 0;
     uint8_t value = fetch_operand(cpu, mode, &address);
@@ -1156,34 +1242,34 @@ void handle_DEC(Cpu* cpu, uint8_t opcode) {
     set_zero_flag(cpu, value);
     set_negative_flag(cpu, value);
 
-    if (mode == ABSOLUTE_X) {
+    if (mode == ABX) {
         uint16_t base = address - cpu->X;
-        if (page_crossed(base, address)) cpu->cycles_left += 1;
+        if (page_crossed(base, address)) cpu->cycles_left -= 1;
     }
 }
 
 void handle_DEX(Cpu* cpu, uint8_t opcode) {
-    cpu->cycles_left += opcode_table[opcode].cycles;
+    cpu->cycles_left -= opcode_table[opcode].cycles;
     cpu->X--;
     set_zero_flag(cpu, cpu->X);
     set_negative_flag(cpu, cpu->X);
 }
 
 void handle_DEY(Cpu* cpu, uint8_t opcode) {
-    cpu->cycles_left += opcode_table[opcode].cycles;
+    cpu->cycles_left -= opcode_table[opcode].cycles;
     cpu->Y--;
     set_zero_flag(cpu, cpu->Y);
     set_negative_flag(cpu, cpu->Y);
 }
 
 void handle_ASL(Cpu* cpu, uint8_t opcode) {
-    cpu->cycles_left += opcode_table[opcode].cycles;
+    cpu->cycles_left -= opcode_table[opcode].cycles;
     uint16_t address = 0;
     uint8_t value;
     bool is_accumulator = false;
     AddressingMode mode = opcode_table[opcode].addressing_mode;
 
-    if (mode == ACCUMULATOR) {
+    if (mode == ACC) {
         value = cpu->A;
         is_accumulator = true;
     } else {
@@ -1205,13 +1291,13 @@ void handle_ASL(Cpu* cpu, uint8_t opcode) {
 }
 
 void handle_LSR(Cpu* cpu, uint8_t opcode) {
-    cpu->cycles_left += opcode_table[opcode].cycles;
+    cpu->cycles_left -= opcode_table[opcode].cycles;
     uint16_t address = 0;
     uint8_t value;
     bool is_accumulator = false;
     AddressingMode mode = opcode_table[opcode].addressing_mode;
 
-    if (mode == ACCUMULATOR) {
+    if (mode == ACC) {
         value = cpu->A;
         is_accumulator = true;
     } else {
@@ -1233,13 +1319,13 @@ void handle_LSR(Cpu* cpu, uint8_t opcode) {
 }
 
 void handle_ROL(Cpu* cpu, uint8_t opcode) {
-    cpu->cycles_left += opcode_table[opcode].cycles;
+    cpu->cycles_left -= opcode_table[opcode].cycles;
     uint16_t address = 0;
     uint8_t value;
     bool is_accumulator = false;
     AddressingMode mode = opcode_table[opcode].addressing_mode;
 
-    if (mode == ACCUMULATOR) {
+    if (mode == ACC) {
         value = cpu->A;
         is_accumulator = true;
     } else {
@@ -1262,13 +1348,13 @@ void handle_ROL(Cpu* cpu, uint8_t opcode) {
 }
 
 void handle_ROR(Cpu* cpu, uint8_t opcode) {
-    cpu->cycles_left += opcode_table[opcode].cycles;
+    cpu->cycles_left -= opcode_table[opcode].cycles;
     uint16_t address = 0;
     uint8_t value;
     bool is_accumulator = false;
     AddressingMode mode = opcode_table[opcode].addressing_mode;
 
-    if (mode == ACCUMULATOR) {
+    if (mode == ACC) {
         value = cpu->A;
         is_accumulator = true;
     } else {
@@ -1291,12 +1377,12 @@ void handle_ROR(Cpu* cpu, uint8_t opcode) {
 }
 
 void handle_JMP(Cpu* cpu, uint8_t opcode) {
-    cpu->cycles_left += opcode_table[opcode].cycles;
+    cpu->cycles_left -= opcode_table[opcode].cycles;
     AddressingMode mode = opcode_table[opcode].addressing_mode;
-    if (mode == ABSOLUTE) {
+    if (mode == ABS) {
         uint16_t addr = bus_read(cpu->bus, cpu->PC++) | (bus_read(cpu->bus, cpu->PC++) << 8);
         cpu->PC = addr;
-    } else if (mode == INDIRECT) {
+    } else if (mode == IND) {
         uint16_t ptr = bus_read(cpu->bus, cpu->PC++) | (bus_read(cpu->bus, cpu->PC++) << 8);
         uint16_t addr;
         if ((ptr & 0x00FF) == 0x00FF) {
@@ -1313,7 +1399,7 @@ void handle_JMP(Cpu* cpu, uint8_t opcode) {
 }
 
 void handle_JSR(Cpu* cpu, uint8_t opcode) {
-    cpu->cycles_left += opcode_table[opcode].cycles;
+    cpu->cycles_left -= opcode_table[opcode].cycles;
     uint16_t addr = bus_read(cpu->bus, cpu->PC++) | (bus_read(cpu->bus, cpu->PC++) << 8);
     uint16_t return_addr = cpu->PC - 1;
     push_stack(cpu, (return_addr >> 8) & 0xFF);
@@ -1323,7 +1409,7 @@ void handle_JSR(Cpu* cpu, uint8_t opcode) {
 }
 
 void handle_RTS(Cpu* cpu, uint8_t opcode) {
-    cpu->cycles_left += opcode_table[opcode].cycles;
+    cpu->cycles_left -= opcode_table[opcode].cycles;
     uint8_t low = pull_stack(cpu);
     uint8_t high = pull_stack(cpu);
     uint16_t return_addr = (high << 8) | low;
@@ -1331,132 +1417,132 @@ void handle_RTS(Cpu* cpu, uint8_t opcode) {
     // RTS no extra conditional cycles
 }
 
-// Branches (add cycles if branch taken and possibly if page crossed)
+// Branches (subtract cycles if branch taken and possibly if page crossed)
 void handle_BCC(Cpu* cpu, uint8_t opcode) {
-    cpu->cycles_left += opcode_table[opcode].cycles;
+    cpu->cycles_left -= opcode_table[opcode].cycles;
     int8_t offset = (int8_t)bus_read(cpu->bus, cpu->PC++);
     if (!(cpu->STATUS & FLAG_CARRY)) {
         uint16_t old_pc = cpu->PC;
         cpu->PC += offset;
-        cpu->cycles_left += 1; // branch taken
-        if (page_crossed(old_pc, cpu->PC)) cpu->cycles_left += 1;
+        cpu->cycles_left -= 1; // branch taken
+        if (page_crossed(old_pc, cpu->PC)) cpu->cycles_left -= 1;
     }
 }
 
 void handle_BCS(Cpu* cpu, uint8_t opcode) {
-    cpu->cycles_left += opcode_table[opcode].cycles;
+    cpu->cycles_left -= opcode_table[opcode].cycles;
     int8_t offset = (int8_t)bus_read(cpu->bus, cpu->PC++);
     if (cpu->STATUS & FLAG_CARRY) {
         uint16_t old_pc = cpu->PC;
         cpu->PC += offset;
-        cpu->cycles_left += 1;
-        if (page_crossed(old_pc, cpu->PC)) cpu->cycles_left += 1;
+        cpu->cycles_left -= 1;
+        if (page_crossed(old_pc, cpu->PC)) cpu->cycles_left -= 1;
     }
 }
 
 void handle_BEQ(Cpu* cpu, uint8_t opcode) {
-    cpu->cycles_left += opcode_table[opcode].cycles;
+    cpu->cycles_left -= opcode_table[opcode].cycles;
     int8_t offset = (int8_t)bus_read(cpu->bus, cpu->PC++);
     if (cpu->STATUS & FLAG_ZERO) {
         uint16_t old_pc = cpu->PC;
         cpu->PC += offset;
-        cpu->cycles_left += 1;
-        if (page_crossed(old_pc, cpu->PC)) cpu->cycles_left += 1;
+        cpu->cycles_left -= 1;
+        if (page_crossed(old_pc, cpu->PC)) cpu->cycles_left -= 1;
     }
 }
 
 void handle_BMI(Cpu* cpu, uint8_t opcode) {
-    cpu->cycles_left += opcode_table[opcode].cycles;
+    cpu->cycles_left -= opcode_table[opcode].cycles;
     int8_t offset = (int8_t)bus_read(cpu->bus, cpu->PC++);
     if (cpu->STATUS & FLAG_NEGATIVE) {
         uint16_t old_pc = cpu->PC;
         cpu->PC += offset;
-        cpu->cycles_left += 1;
-        if (page_crossed(old_pc, cpu->PC)) cpu->cycles_left += 1;
+        cpu->cycles_left -= 1;
+        if (page_crossed(old_pc, cpu->PC)) cpu->cycles_left -= 1;
     }
 }
 
 void handle_BNE(Cpu* cpu, uint8_t opcode) {
-    cpu->cycles_left += opcode_table[opcode].cycles;
+    cpu->cycles_left -= opcode_table[opcode].cycles;
     int8_t offset = (int8_t)bus_read(cpu->bus, cpu->PC++);
     if (!(cpu->STATUS & FLAG_ZERO)) {
         uint16_t old_pc = cpu->PC;
         cpu->PC += offset;
-        cpu->cycles_left += 1;
-        if (page_crossed(old_pc, cpu->PC)) cpu->cycles_left += 1;
+        cpu->cycles_left -= 1;
+        if (page_crossed(old_pc, cpu->PC)) cpu->cycles_left -= 1;
     }
 }
 
 void handle_BPL(Cpu* cpu, uint8_t opcode) {
-    cpu->cycles_left += opcode_table[opcode].cycles;
+    cpu->cycles_left -= opcode_table[opcode].cycles;
     int8_t offset = (int8_t)bus_read(cpu->bus, cpu->PC++);
     if (!(cpu->STATUS & FLAG_NEGATIVE)) {
         uint16_t old_pc = cpu->PC;
         cpu->PC += offset;
-        cpu->cycles_left += 1;
-        if (page_crossed(old_pc, cpu->PC)) cpu->cycles_left += 1;
+        cpu->cycles_left -= 1;
+        if (page_crossed(old_pc, cpu->PC)) cpu->cycles_left -= 1;
     }
 }
 
 void handle_BVC(Cpu* cpu, uint8_t opcode) {
-    cpu->cycles_left += opcode_table[opcode].cycles;
+    cpu->cycles_left -= opcode_table[opcode].cycles;
     int8_t offset = (int8_t)bus_read(cpu->bus, cpu->PC++);
     if (!(cpu->STATUS & FLAG_OVERFLOW)) {
         uint16_t old_pc = cpu->PC;
         cpu->PC += offset;
-        cpu->cycles_left += 1;
-        if (page_crossed(old_pc, cpu->PC)) cpu->cycles_left += 1;
+        cpu->cycles_left -= 1;
+        if (page_crossed(old_pc, cpu->PC)) cpu->cycles_left -= 1;
     }
 }
 
 void handle_BVS(Cpu* cpu, uint8_t opcode) {
-    cpu->cycles_left += opcode_table[opcode].cycles;
+    cpu->cycles_left -= opcode_table[opcode].cycles;
     int8_t offset = (int8_t)bus_read(cpu->bus, cpu->PC++);
     if (cpu->STATUS & FLAG_OVERFLOW) {
         uint16_t old_pc = cpu->PC;
         cpu->PC += offset;
-        cpu->cycles_left += 1;
-        if (page_crossed(old_pc, cpu->PC)) cpu->cycles_left += 1;
+        cpu->cycles_left -= 1;
+        if (page_crossed(old_pc, cpu->PC)) cpu->cycles_left -= 1;
     }
 }
 
 void handle_CLC(Cpu* cpu, uint8_t opcode) {
-    cpu->cycles_left += opcode_table[opcode].cycles;
+    cpu->cycles_left -= opcode_table[opcode].cycles;
     set_carry_flag(cpu, false);
 }
 
 void handle_CLD(Cpu* cpu, uint8_t opcode) {
-    cpu->cycles_left += opcode_table[opcode].cycles;
+    cpu->cycles_left -= opcode_table[opcode].cycles;
     cpu->STATUS &= ~FLAG_DECIMAL;
 }
 
 void handle_CLI(Cpu* cpu, uint8_t opcode) {
-    cpu->cycles_left += opcode_table[opcode].cycles;
+    cpu->cycles_left -= opcode_table[opcode].cycles;
     cpu->STATUS &= ~FLAG_INTERRUPT;
 }
 
 void handle_CLV(Cpu* cpu, uint8_t opcode) {
-    cpu->cycles_left += opcode_table[opcode].cycles;
+    cpu->cycles_left -= opcode_table[opcode].cycles;
     set_overflow_flag(cpu, false);
 }
 
 void handle_SEC(Cpu* cpu, uint8_t opcode) {
-    cpu->cycles_left += opcode_table[opcode].cycles;
+    cpu->cycles_left -= opcode_table[opcode].cycles;
     set_carry_flag(cpu, true);
 }
 
 void handle_SED(Cpu* cpu, uint8_t opcode) {
-    cpu->cycles_left += opcode_table[opcode].cycles;
+    cpu->cycles_left -= opcode_table[opcode].cycles;
     cpu->STATUS |= FLAG_DECIMAL;
 }
 
 void handle_SEI(Cpu* cpu, uint8_t opcode) {
-    cpu->cycles_left += opcode_table[opcode].cycles;
+    cpu->cycles_left -= opcode_table[opcode].cycles;
     set_interrupt_flag(cpu, true);
 }
 
 void handle_BRK(Cpu* cpu, uint8_t opcode) {
-    cpu->cycles_left += opcode_table[opcode].cycles;
+    cpu->cycles_left -= opcode_table[opcode].cycles;
     cpu->PC++; 
     push_stack(cpu, (cpu->PC >> 8) & 0xFF);
     push_stack(cpu, cpu->PC & 0xFF);
@@ -1469,12 +1555,12 @@ void handle_BRK(Cpu* cpu, uint8_t opcode) {
 }
 
 void handle_NOP(Cpu* cpu, uint8_t opcode) {
-    cpu->cycles_left += opcode_table[opcode].cycles;
+    cpu->cycles_left -= opcode_table[opcode].cycles;
     // NOP does nothing else
 }
 
 void handle_RTI(Cpu* cpu, uint8_t opcode) {
-    cpu->cycles_left += opcode_table[opcode].cycles;
+    cpu->cycles_left -= opcode_table[opcode].cycles;
     cpu->STATUS = pull_stack(cpu);
     cpu->STATUS |= FLAG_UNUSED;
     uint8_t low = pull_stack(cpu);
