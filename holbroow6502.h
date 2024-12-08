@@ -7,10 +7,10 @@
 #include <stdbool.h>
 #include <time.h>
 
-#define CPU_CYCLES_PERSEC 1690000
-#define FRAMES_PERSEC 60
-#define CYCLES_PER_FRAME (CPU_CYCLES_PERSEC / FRAMES_PERSEC)
-#define FRAME_TIME_PERSEC (1 / 60)
+#define CPU_CYCLES_PERSEC 1690000                               // Clock cycles per second
+#define FRAMES_PERSEC 60                                        // Frames per second
+#define CYCLES_PER_FRAME (CPU_CYCLES_PERSEC / FRAMES_PERSEC)    // Clock cycles per frame
+#define FRAME_TIME_PERSEC (1000000000LL / 60)                     // Frame time in nanoseconds
 
 // Status flags
 #define FLAG_CARRY      0x01

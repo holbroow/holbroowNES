@@ -545,7 +545,7 @@ void run_cpu(Cpu* cpu) {
 
 
     // Initialize frame timing
-    uint64_t desired_frame_time_ns = 1000000000ULL / FRAMES_PERSEC; // ~16,666,667 ns/frame
+    uint64_t desired_frame_time_ns = FRAME_TIME_PERSEC; // ~16,666,667 ns/frame
     uint64_t frame_start_time_ns = get_time_ns();
     cpu->cycles_left = CYCLES_PER_FRAME;
     
