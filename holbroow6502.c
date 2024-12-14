@@ -545,7 +545,6 @@ void run_cpu(Cpu* cpu) {
 
 
     // Initialize frame timing
-    uint64_t desired_frame_time_ns = FRAME_TIME_PERSEC; // ~16,666,667 ns/frame
     uint64_t frame_start_time_ns = get_time_ns();
     cpu->cycles_left = CYCLES_PER_FRAME;
     
@@ -763,37 +762,37 @@ void run_cpu(Cpu* cpu) {
             }
 
         } else {
-            // Check how long below a second those 25,166 cycles took, sleep for rest until 1 sec
-            // Stop timer
-            uint64_t frame_end_time_ns = get_time_ns();
-            uint64_t elapsed_time_ns = frame_end_time_ns - frame_start_time_ns;
-
             // NOTE: cycles_left is already decremented by the instruction handlers!
             // Calculate now long that prev 'frame' took (assuming not on instruction 0... if so, we skip this consideration)
             // Frame count is incremented for each frame after frame 0
             i++;
 
+            // Check how long below a second those 25,166 cycles took, sleep for rest until 1 sec
+            // Stop timer
+            uint64_t frame_end_time_ns = get_time_ns();
+            uint64_t elapsed_time_ns = frame_end_time_ns - frame_start_time_ns;
             // Check difference between timer value and 1 second
-            int64_t sleep_time_ns = desired_frame_time_ns - elapsed_time_ns;
+            int64_t sleep_time_ns = FRAME_TIME_PERSEC - elapsed_time_ns;
 
             // Sleep for that (millisecond format) difference
             if (sleep_time_ns > 0) {
-                // Convert nanoseconds to microseconds for sleep_microseconds
-                uint64_t sleep_time_us = sleep_time_ns / 1000;
                 if ((i % 60) == 0) {
-                    printf("CPU: Frame %d - Slept for %d microseconds to retain clock speed.\n", i, sleep_time_us);
+                    printf("CPU: Slept for %d microseconds to retain clock speed.\n", sleep_time_ns / 1000);
                 }
-                sleep_microseconds(sleep_time_us);
+                // Convert nanoseconds to microseconds for sleep_microseconds, and sleep
+                sleep_microseconds(sleep_time_ns / 1000);
+
             } else {
                 // Frame took longer than desired; consider logging or handling lag
                 printf("CPU: Warning: Frame %d is lagging by %lld ns.\n", i, -sleep_time_ns);
+                
             }
 
-            // Start timer for frame-time
-            frame_start_time_ns = get_time_ns();
-            
             // Reset cycles_left to 28.166 (Cycles/frame based on 2A03 at 60Hz)
             cpu->cycles_left = CYCLES_PER_FRAME;
+            
+            // Start timer for frame-time
+            frame_start_time_ns = get_time_ns();
         }
     }
 }
