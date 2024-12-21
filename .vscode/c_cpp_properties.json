@@ -4,9 +4,7 @@
             "name": "windows-gcc-x86",
             "includePath": [
                 "${workspaceFolder}/**",
-                "C:/MinGW/include/SDL2/include/SDL2",
-                "C:/MinGW/include/SDL2/include",
-                "C:/MinGW/include"
+                "C:/MinGW/include/**"
             ],
             "compilerPath": "C:/MinGW/bin/gcc.exe",
             "cStandard": "${default}",

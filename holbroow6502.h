@@ -148,8 +148,14 @@ extern const char *AddressModeStrings[13];
 // Function to initialize the CPU
 Cpu* init_cpu(Bus* bus);
 
-// Function to run the CPU
-void run_cpu(Cpu* cpu);
+// Function to run a single CPU clock cycle
+void cpu_clock(Cpu* cpu, bool run_debug, int i);
+
+// Function to print the state of the CPU's current state (registers)
+void print_cpu(Cpu* cpu);
+
+// Function to print a single CPU instruction
+void print_instruction(Cpu* cpu, Opcode c, uint8_t n);
 
 // Declare all handle_* functions
 void handle_LDA(Cpu* cpu, uint8_t opcode);

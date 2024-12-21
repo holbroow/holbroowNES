@@ -60,7 +60,7 @@ void bus_write(Bus* bus, uint16_t address, uint8_t data) {
         bus->rom_memory[address] = data;
 
     } else {
-        fprintf(stderr, "Error: Address 0x%04x out of range for write operation.\n", address);
+        fprintf(stderr, "Error,Adress 0x%04x out of range for write operation.\n", address);
     }
 }
 
