@@ -17,7 +17,7 @@
 // Each line has 341 PPU cycles (0-340)
 
 // PPU registers
-typedef struct {
+typedef struct PpuRegisters {
     uint8_t PPUCTRL;   // $2000
     uint8_t PPUMASK;   // $2001
     uint8_t PPUSTATUS; // $2002
@@ -29,7 +29,7 @@ typedef struct {
     uint8_t OAMDMA;    // not directly in PPU reg space, but used by CPU to write OAM
 } PpuRegisters;
 
-typedef struct {
+typedef struct Ppu {
     // VRAM address registers (15-bit)
     uint16_t v;  // current VRAM address
     uint16_t t;  // temporary VRAM address

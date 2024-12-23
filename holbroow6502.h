@@ -22,7 +22,7 @@
 #define FLAG_NEGATIVE   0x80
 
 // CPU Structure
-typedef struct {
+typedef struct Cpu {
     // CPU Registers
     uint8_t A;          // Accumulator
     uint8_t X;          // X Register
@@ -41,7 +41,7 @@ typedef struct {
 } Cpu;
 
 // Enums for instructions and addressing modes
-typedef enum {
+typedef enum Instruction {
     // Load/Store Operations
     LDA,
     LDX,
@@ -111,7 +111,7 @@ typedef enum {
     RTI,
 } Instruction;
 
-typedef enum {
+typedef enum AddressingMode {
     IMM,    // IMMEDIATE
     ZP0,    // ZERO_PAGE
     ZPX,    // ZERO_PAGE_X
@@ -128,7 +128,7 @@ typedef enum {
 } AddressingMode;
 
 // Opcode structure
-typedef struct {
+typedef struct Opcode {
     Instruction instruction;
     AddressingMode addressing_mode;
     uint8_t bytes;

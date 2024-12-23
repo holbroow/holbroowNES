@@ -28,7 +28,7 @@ PPU - 0x0000 - 0xFFFF
 
 
 // Define the Bus structure
-typedef struct {
+typedef struct Bus {
     uint8_t bus_memory[BUS_MEMORY_SIZE];  // This is mirrored 3 times so there are 4 identical 2048 chunks taking up 8192 of course.
     uint8_t rom_memory[ROM_MEMORY_SIZE];  // Check this!
     uint8_t ppu_memory[PPU_MEMORY_SIZE];
