@@ -1,5 +1,4 @@
-#ifndef PPU_H
-#define PPU_H
+#pragma once
 
 #include <stdint.h>
 #include <stdbool.h>
@@ -105,5 +104,3 @@ void ppu_clear_nmi(Ppu* ppu);
 uint32_t* ppu_get_framebuffer(Ppu* ppu);
 
 static void ppu_increment_v(Ppu* ppu);
-
-#endif

@@ -1,6 +1,5 @@
 // holbroow6502.h
-#ifndef HOLBROOW6502_H
-#define HOLBROOW6502_H
+#pragma once
 
 #include "Bus.h"
 #include <stdint.h>
@@ -224,5 +223,3 @@ void set_overflow_flag(Cpu* cpu, bool set);
 void set_interrupt_flag(Cpu* cpu, bool set);
 void push_stack(Cpu* cpu, uint8_t value);
 uint8_t pull_stack(Cpu* cpu);
-
-#endif // HOLBROOW6502_H
