@@ -1,3 +1,4 @@
+// PPU.c
 #include "PPU.h"
 #include <stdlib.h>
 #include <stdio.h>
@@ -6,8 +7,6 @@
 // Forward declarations of internal functions
 static void ppu_increment_x(Ppu* ppu);
 static void ppu_increment_y(Ppu* ppu);
-static uint8_t ppu_bus_read(Ppu* ppu, uint16_t addr);
-static void ppu_bus_write(Ppu* ppu, uint16_t addr, uint8_t val);
 static void ppu_fetch_background_data(Ppu* ppu);
 static void ppu_shift_registers(Ppu* ppu);
 static void ppu_update_shifters(Ppu* ppu);
@@ -18,7 +17,12 @@ static void ppu_render_pixel(Ppu* ppu);
 static void ppu_set_vertical_blank(Ppu* ppu);
 static void ppu_clear_vertical_blank(Ppu* ppu);
 static uint8_t ppu_read_palette(Ppu* ppu, uint16_t addr);
+static void ppu_increment_v(Ppu* ppu);
 
+// Helper macro for reversing bits (used for horizontal flip)
+#define RBIT(x) (((x * 0x0802U & 0x22110U) | (x * 0x8020U & 0x88440U)) * 0x10101U >> 16)
+
+// Helper function to create a color from NES palette index
 static inline uint32_t make_colour(uint8_t i) {
     // Simple NES palette simulation (placeholder)
     // A real emulator would use a NES palette
@@ -40,39 +44,50 @@ static inline uint32_t make_colour(uint8_t i) {
     return 0xFF000000 | (r << 16) | (g << 8) | b;
 }
 
-Ppu* init_ppu(Bus* bus) {
+// Initialize the PPU
+Ppu* init_ppu() {
     Ppu* ppu = (Ppu*)malloc(sizeof(Ppu));
     if (!ppu) {
         fprintf(stderr, "PPU: Allocation failed\n");
         exit(1);
     }
     memset(ppu, 0, sizeof(*ppu));
-    ppu->bus = bus;
     ppu->reg.PPUSTATUS = 0xA0; // As on power-up
+
+    // Initialize VRAM, Nametables, and Palettes
+    memset(ppu->pattern_tables, 0, sizeof(ppu->pattern_tables));
+    memset(ppu->nametables, 0, sizeof(ppu->nametables));
+    memset(ppu->palettes, 0, sizeof(ppu->palettes));
+
     return ppu;
 }
 
+// Free the PPU
 void free_ppu(Ppu* ppu) {
     free(ppu);
 }
 
+// Get the framebuffer for rendering
 uint32_t* ppu_get_framebuffer(Ppu* ppu) {
     return ppu->framebuffer;
 }
 
+// Check if a frame is done
 bool ppu_is_frame_done(Ppu* ppu) {
     return ppu->frame_done;
 }
 
+// Clear the frame done flag
 void ppu_clear_frame_done(Ppu* ppu) {
     ppu->frame_done = false;
 }
 
-// For CPU interface
+// Check if NMI occurred
 bool ppu_nmi_occurred(Ppu* ppu) {
     return ppu->nmi_occurred;
 }
 
+// Clear the NMI flag
 void ppu_clear_nmi(Ppu* ppu) {
     ppu->nmi_occurred = false;
 }
@@ -93,7 +108,15 @@ uint8_t ppu_read(Ppu* ppu, uint16_t address) {
         }
         case 0x2007: { // PPUDATA
             uint16_t addr = ppu->v & 0x3FFF;
-            uint8_t data = ppu_bus_read(ppu, addr);
+            uint8_t data = 0;
+            if (addr < 0x2000) { // Pattern Tables
+                data = ppu->pattern_tables[addr];
+            } else if (addr < 0x3000) { // Nametables
+                data = ppu->nametables[addr - 0x2000];
+            } else { // Palettes
+                data = ppu->palettes[addr - 0x3F00];
+            }
+
             // The PPU has a buffered read
             uint8_t buffered = ppu->reg.PPUDATA;
             ppu->reg.PPUDATA = data;
@@ -106,8 +129,9 @@ uint8_t ppu_read(Ppu* ppu, uint16_t address) {
                 return buffered;
             }
         }
+        default:
+            return 0;
     }
-    return 0;
 }
 
 // Write a PPU register from CPU
@@ -150,12 +174,25 @@ void ppu_write(Ppu* ppu, uint16_t address, uint8_t value) {
                 ppu->w = false;
             }
             break;
-        case 0x2007: {
+        case 0x2007: { // PPUDATA
             uint16_t addr = ppu->v & 0x3FFF;
-            ppu_bus_write(ppu, addr, value);
+            if (addr < 0x2000) { // Pattern Tables
+                ppu->pattern_tables[addr] = value;
+            } else if (addr < 0x3000) { // Nametables
+                ppu->nametables[addr - 0x2000] = value;
+            } else { // Palettes
+                uint16_t palette_addr = addr - 0x3F00;
+                if (palette_addr % 4 == 0 && palette_addr > 0) {
+                    // Mirror of 0x3F00
+                    ppu->palettes[0] = value;
+                }
+                ppu->palettes[palette_addr & 0x1F] = value;
+            }
             ppu_increment_v(ppu);
             break;
         }
+        default:
+            break;
     }
 }
 
@@ -166,18 +203,6 @@ static void ppu_increment_v(Ppu* ppu) {
     } else {
         ppu->v += 1;
     }
-}
-
-// PPU memory read
-static uint8_t ppu_bus_read(Ppu* ppu, uint16_t addr) {
-    addr &= 0x3FFF;
-    return bus_read(ppu->bus, addr);
-}
-
-// PPU memory write
-static void ppu_bus_write(Ppu* ppu, uint16_t addr, uint8_t val) {
-    addr &= 0x3FFF;
-    bus_write(ppu->bus, addr, val);
 }
 
 // Rendering steps
@@ -221,28 +246,29 @@ static void ppu_transfer_y(Ppu* ppu) {
     ppu->v = (ppu->v & 0x841F) | (ppu->t & 0x7BE0);
 }
 
+// Read from palette memory
 static uint8_t ppu_read_palette(Ppu* ppu, uint16_t addr) {
     addr &= 0x1F;
     // Palette is at 3F00-3F1F
-    return ppu_bus_read(ppu, 0x3F00 + addr);
+    return ppu->palettes[addr];
 }
 
 // Fetch background data
 static void ppu_fetch_background_data(Ppu* ppu) {
     uint16_t base_nametable = 0x2000;
     uint16_t addr = base_nametable | (ppu->v & 0x0FFF);
-    ppu->nametable_byte = ppu_bus_read(ppu, addr);
+    ppu->nametable_byte = ppu->nametables[addr - 0x2000];
 
     uint16_t attr_addr = 0x23C0 | (ppu->v & 0x0C00) | ((ppu->v >> 4) & 0x38) | ((ppu->v >> 2) & 0x07);
-    ppu->attribute_byte = ppu_bus_read(ppu, attr_addr);
+    ppu->attribute_byte = ppu->nametables[attr_addr - 0x2000];
     // Shift attribute bits
     uint8_t shift = ((ppu->v >> 4) & 4) | (ppu->v & 2);
     ppu->attribute_byte = ((ppu->attribute_byte >> shift) & 0x03);
 
     uint16_t pattern_base = (ppu->reg.PPUCTRL & 0x10) ? 0x1000 : 0x0000;
     uint16_t pattern_addr = pattern_base + (ppu->nametable_byte * 16) + ((ppu->v >> 12) & 7);
-    ppu->low_pattern_byte = ppu_bus_read(ppu, pattern_addr);
-    ppu->high_pattern_byte = ppu_bus_read(ppu, pattern_addr + 8);
+    ppu->low_pattern_byte = ppu->pattern_tables[pattern_addr];
+    ppu->high_pattern_byte = ppu->pattern_tables[pattern_addr + 8];
 }
 
 // Update shift registers before fetching next tile
@@ -250,13 +276,14 @@ static void ppu_update_shifters(Ppu* ppu) {
     ppu->pattern_shift_low = (ppu->pattern_shift_low & 0xFF00) | ppu->low_pattern_byte;
     ppu->pattern_shift_high = (ppu->pattern_shift_high & 0xFF00) | ppu->high_pattern_byte;
 
-    uint8_t palette_high = (ppu->attribute_byte & 0x02) ? 0xFF : 0x00;
-    uint8_t palette_low = (ppu->attribute_byte & 0x01) ? 0xFF : 0x00;
+    uint8_t palette_low = (ppu->attribute_byte & 0x02) ? 0xFF : 0x00;
+    uint8_t palette_high = (ppu->attribute_byte & 0x01) ? 0xFF : 0x00;
 
-    ppu->attribute_shift_low = (ppu->attribute_shift_low & 0xFF00) | (palette_low ? 0xFF : 0x00);
-    ppu->attribute_shift_high = (ppu->attribute_shift_high & 0xFF00) | (palette_high ? 0xFF : 0x00);
+    ppu->attribute_shift_low = (ppu->attribute_shift_low & 0xFF00) | palette_low;
+    ppu->attribute_shift_high = (ppu->attribute_shift_high & 0xFF00) | palette_high;
 }
 
+// Shift background shift registers
 static void ppu_shift_registers(Ppu* ppu) {
     if (ppu->reg.PPUMASK & 0x08) {
         ppu->pattern_shift_low <<= 1;
@@ -318,14 +345,11 @@ static void ppu_evaluate_sprites(Ppu* ppu) {
             pattern_addr = base + tile*16 + (line & 7) + ((line & 8) ? 8 : 0);
         }
 
-        uint8_t low = ppu_bus_read(ppu, pattern_addr);
-        uint8_t high = ppu_bus_read(ppu, pattern_addr+8);
+        uint8_t low = ppu->pattern_tables[pattern_addr];
+        uint8_t high = ppu->pattern_tables[pattern_addr + 8];
 
         if (attr & 0x40) {
             // horizontal flip
-            // reverse bits
-            // Reverse function:
-            #define RBIT(x) (((x * 0x0802U & 0x22110U) | (x * 0x8020U & 0x88440U))*0x10101U>>16)
             low = (uint8_t)RBIT(low);
             high = (uint8_t)RBIT(high);
         }
@@ -339,6 +363,7 @@ static void ppu_evaluate_sprites(Ppu* ppu) {
     }
 }
 
+// Get background pixel color
 static uint8_t ppu_background_pixel(Ppu* ppu) {
     if (!(ppu->reg.PPUMASK & 0x08)) return 0; // Background not enabled
     uint16_t bit0 = (ppu->pattern_shift_low & 0x8000) >> 15;
@@ -353,6 +378,7 @@ static uint8_t ppu_background_pixel(Ppu* ppu) {
     return ppu_read_palette(ppu, (palette << 2) + pixel);
 }
 
+// Get sprite pixel color
 static uint8_t ppu_sprite_pixel(Ppu* ppu, uint8_t* sprite_index) {
     if (!(ppu->reg.PPUMASK & 0x10)) return 0; // Sprites not enabled
     uint8_t x = (uint8_t)(ppu->cycle - 1);
@@ -372,6 +398,7 @@ static uint8_t ppu_sprite_pixel(Ppu* ppu, uint8_t* sprite_index) {
     return 0;
 }
 
+// Render a single pixel
 static void ppu_render_pixel(Ppu* ppu) {
     int x = ppu->cycle - 1;
     int y = ppu->scanline;
@@ -405,9 +432,10 @@ static void ppu_render_pixel(Ppu* ppu) {
         }
     }
 
-    ppu->framebuffer[y*PPU_SCREEN_WIDTH + x] = make_colour(final_color);
+    ppu->framebuffer[y * PPU_SCREEN_WIDTH + x] = make_colour(final_color);
 }
 
+// Set vertical blank flag and trigger NMI if enabled
 static void ppu_set_vertical_blank(Ppu* ppu) {
     ppu->reg.PPUSTATUS |= 0x80;
     if (ppu->reg.PPUCTRL & 0x80) {
@@ -415,10 +443,12 @@ static void ppu_set_vertical_blank(Ppu* ppu) {
     }
 }
 
+// Clear vertical blank flag
 static void ppu_clear_vertical_blank(Ppu* ppu) {
     ppu->reg.PPUSTATUS &= ~0x80;
 }
 
+// PPU clock - advance the PPU by one cycle
 void ppu_clock(Ppu* ppu) {
     bool rendering_enabled = (ppu->reg.PPUMASK & 0x18) != 0;
 

@@ -1,9 +1,10 @@
+// PPU.h
 #pragma once
 
 #include <stdint.h>
 #include <stdbool.h>
-#include "Bus.h"
 
+// Define screen dimensions
 #define PPU_SCREEN_WIDTH 256
 #define PPU_SCREEN_HEIGHT 240
 
@@ -17,7 +18,7 @@
 // Each line has 341 PPU cycles (0-340)
 
 // PPU registers
-typedef struct PpuRegisters {
+typedef struct {
     uint8_t PPUCTRL;   // $2000
     uint8_t PPUMASK;   // $2001
     uint8_t PPUSTATUS; // $2002
@@ -29,6 +30,15 @@ typedef struct PpuRegisters {
     uint8_t OAMDMA;    // not directly in PPU reg space, but used by CPU to write OAM
 } PpuRegisters;
 
+// Sprite data structure
+typedef struct {
+    uint8_t y;
+    uint8_t tile_index;
+    uint8_t attributes;
+    uint8_t x;
+} Sprite;
+
+// PPU structure
 typedef struct Ppu {
     // VRAM address registers (15-bit)
     uint16_t v;  // current VRAM address
@@ -37,11 +47,16 @@ typedef struct Ppu {
     bool w;      // write toggle for PPUSCROLL/PPUADDR
 
     // OAM
-    uint8_t OAM[256];      // Primary OAM
-    uint8_t secondary_OAM[32]; // Secondary OAM for sprite evaluation
+    uint8_t OAM[256];           // Primary OAM
+    uint8_t secondary_OAM[32];  // Secondary OAM for sprite evaluation
 
     // Framebuffer
     uint32_t framebuffer[PPU_SCREEN_WIDTH * PPU_SCREEN_HEIGHT];
+
+    // Internal PPU memory
+    uint8_t pattern_tables[0x2000];   // 0x0000 - 0x1FFF
+    uint8_t nametables[0x1000];       // 0x2000 - 0x2FFF
+    uint8_t palettes[0x20];            // 0x3F00 - 0x3F1F
 
     // Latches for fetching background data
     uint8_t nametable_byte;
@@ -56,12 +71,7 @@ typedef struct Ppu {
     uint16_t attribute_shift_high;
 
     // Sprite rendering data
-    struct {
-        uint8_t y;
-        uint8_t tile_index;
-        uint8_t attributes;
-        uint8_t x;
-    } sprite_data[8]; // sprite data for current scanline
+    Sprite sprite_data[8]; // sprite data for current scanline
     uint8_t sprite_count;
     uint8_t sprite_pattern_low[8];
     uint8_t sprite_pattern_high[8];
@@ -75,26 +85,19 @@ typedef struct Ppu {
     bool frame_done;
     bool nmi_occurred;
 
-    // Reference to bus (for PPU memory read/writes)
-    Bus* bus;
-
     PpuRegisters reg;
-
 } Ppu;
 
 // Function prototypes
-Ppu* init_ppu(Bus* bus);
+Ppu* init_ppu();
 void free_ppu(Ppu* ppu);
 void ppu_clock(Ppu* ppu);
 bool ppu_is_frame_done(Ppu* ppu);
 void ppu_clear_frame_done(Ppu* ppu);
 
 // External interface for CPU to read/write PPU registers
-// uint8_t ppu_read_register(Ppu* ppu, uint16_t address);
-// void ppu_write_register(Ppu* ppu, uint16_t address, uint8_t value);
 uint8_t ppu_read(Ppu* ppu, uint16_t address);
 void ppu_write(Ppu* ppu, uint16_t address, uint8_t value);
-
 
 // For CPU NMI check
 bool ppu_nmi_occurred(Ppu* ppu);
@@ -102,5 +105,3 @@ void ppu_clear_nmi(Ppu* ppu);
 
 // Get framebuffer
 uint32_t* ppu_get_framebuffer(Ppu* ppu);
-
-static void ppu_increment_v(Ppu* ppu);
