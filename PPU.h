@@ -58,6 +58,7 @@ typedef struct Ppu {
     uint8_t nametables[0x1000];       // 0x2000 - 0x2FFF
     uint8_t palettes[0x20];            // 0x3F00 - 0x3F1F
 
+
     // Latches for fetching background data
     uint8_t nametable_byte;
     uint8_t attribute_byte;
@@ -90,6 +91,7 @@ typedef struct Ppu {
 
 // Function prototypes
 Ppu* init_ppu();
+
 void free_ppu(Ppu* ppu);
 void ppu_clock(Ppu* ppu);
 bool ppu_is_frame_done(Ppu* ppu);

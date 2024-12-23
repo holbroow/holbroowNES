@@ -4,6 +4,8 @@
 #include <stdio.h>
 #include <string.h>
 
+typedef struct Bus Bus;
+
 // Forward declarations of internal functions
 static void ppu_increment_x(Ppu* ppu);
 static void ppu_increment_y(Ppu* ppu);
@@ -48,16 +50,20 @@ static inline uint32_t make_colour(uint8_t i) {
 Ppu* init_ppu() {
     Ppu* ppu = (Ppu*)malloc(sizeof(Ppu));
     if (!ppu) {
-        fprintf(stderr, "PPU: Allocation failed\n");
+        fprintf(stderr, "[PPU] Memory allocation failed\n");
         exit(1);
     }
     memset(ppu, 0, sizeof(*ppu));
     ppu->reg.PPUSTATUS = 0xA0; // As on power-up
+    printf("[PPU] Memory allocated.\n");
 
     // Initialize VRAM, Nametables, and Palettes
     memset(ppu->pattern_tables, 0, sizeof(ppu->pattern_tables));
+    printf("[PPU] Allocated pattern table.\n");
     memset(ppu->nametables, 0, sizeof(ppu->nametables));
+    printf("[PPU] Allocated nametables.\n");
     memset(ppu->palettes, 0, sizeof(ppu->palettes));
+    printf("[PPU] Allocated pallete table.\n");
 
     return ppu;
 }

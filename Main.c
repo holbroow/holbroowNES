@@ -19,11 +19,11 @@ uint64_t get_time_ns() {
     LARGE_INTEGER frequency;
     LARGE_INTEGER counter;
     if (!QueryPerformanceFrequency(&frequency)) {
-        fprintf(stderr, "QueryPerformanceFrequency failed!\n");
+        fprintf(stderr, "CPU: Time, QueryPerformanceFrequency failed!\n");
         return 0;
     }
     if (!QueryPerformanceCounter(&counter)) {
-        fprintf(stderr, "QueryPerformanceCounter failed!\n");
+        fprintf(stderr, "CPU: Time, QueryPerformanceCounter failed!\n");
         return 0;
     }
     return (uint64_t)((counter.QuadPart * 1000000000LL) / frequency.QuadPart);
@@ -68,7 +68,7 @@ int load_program(Bus* bus, uint16_t start_address, const char* hex_string) {
         buffer[0] = toupper((unsigned char)*ptr);   // First character as first 4 bits
         ptr++;
         if (*ptr == '\0') {
-            fprintf(stderr, "MANAGER: Error, Incomplete byte in hex string while loading program bytes.\n");
+            fprintf(stderr, "[MANAGER] Error, Incomplete byte in hex string while loading program bytes.\n");
             break;
         }
         buffer[1] = toupper((unsigned char)*ptr);   // Second character as second 4 bits to form the full byte
@@ -79,7 +79,7 @@ int load_program(Bus* bus, uint16_t start_address, const char* hex_string) {
         char* endptr;
         uint8_t byte = (uint8_t)strtol(buffer, &endptr, 16);
         if (*endptr != '\0') {
-            fprintf(stderr, "MANAGER: Error, Invalid hex byte '%s' while loading program bytes.\n", buffer);
+            fprintf(stderr, "[MANAGER] Error, Invalid hex byte '%s' while loading program bytes.\n", buffer);
             continue; // Skip invalid byte
         }
 
@@ -89,34 +89,58 @@ int load_program(Bus* bus, uint16_t start_address, const char* hex_string) {
 
         // Check for memory bounds
         if (current_address > 0xFFFF) {
-            fprintf(stderr, "MANAGER: Error, Reached end of memory while loading program.\n");
+            fprintf(stderr, "[MANAGER] Error, Reached end of memory while loading program.\n");
             break;
         }
     }
 
-    printf("MANAGER: Program loaded successfully, starting at 0x%04X.\n", start_address);
+    printf("[MANAGER] Program loaded successfully, starting at 0x%04X.\n", start_address);
     return start_address;
 }
 
 // Main function
-int main() {
+int main(int argc, char* argv[]) {
+    if (argc < 2) {
+        fprintf(stderr, "Usage: %s <path_to_nes_file>\n", argv[0]);
+        return 1;
+    }
+    const char* nes_path = argv[1];
+
+    // Initialise .nes game ('Cartridge')
+    Cartridge* cart = init_cart(nes_path);
+
     // Initialize Bus
+    printf("[MANAGER] Initialising BUS...\n");
     Bus* bus = init_bus();
+    printf("[MANAGER] Initialising BUS finished!\n");
+
+    // Initialize PPU
+    printf("[MANAGER] Initialising PPU...\n");
+    Ppu* ppu = init_ppu();
+    printf("[MANAGER] Assigning PPU reference to the BUS...\n");
+    bus->ppu = ppu;
+    printf("[MANAGER] Assigning Game Cartridge reference to the BUS...\n");
+    bus->cart = cart;
+    printf("[MANAGER] Initialising PPU finished!\n");
 
     // Initialize CPU
+    printf("[MANAGER] Initialising CPU...\n");
     Cpu* cpu = init_cpu(bus);
+    printf("[MANAGER] Initialising CPU finished!\n");
 
-    // Initialise PPU
-    Ppu* ppu = init_ppu(bus);
+    // Set program counter to the reset vector (0xFFFC-0xFFFD)
+    uint16_t reset_low = bus_read(bus, 0xFFFC);
+    uint16_t reset_high = bus_read(bus, 0xFFFD);
+    uint16_t reset_vector = (reset_high << 8) | reset_low;
+    cpu->PC = reset_vector;
+    printf("MANAGER: CPU PC set to reset vector 0x%04X\n", reset_vector);
 
+    // // Program code to load:    Multiply 10 by 3
+    // // Grab the start_address from the loaded program, to point the PC towards
+    // int start_address = load_program(bus, 0x0100, "A2 0A 8E 00 00 A2 03 8E 01 00 AC 00 00 A9 00 18 6D 01 00 88 D0 FA 8D 02 00 EA EA EA");
 
-    // Program code to load:    Multiply 10 by 3
-    // Grab the start_address from the loaded program, to point the PC towards
-    int start_address = load_program(bus, 0x0100, "A2 0A 8E 00 00 A2 03 8E 01 00 AC 00 00 A9 00 18 6D 01 00 88 D0 FA 8D 02 00 EA EA EA");
-
-    // Set PC to start of program
-    cpu->PC = start_address;
-
+    // // Set PC to start of program
+    // cpu->PC = start_address;
 
     // Run the NES!!!
     int frame_num = 0;
@@ -152,15 +176,12 @@ int main() {
                 printf("CPU Cycles left: %d\n", cpu->cycles_left);
             }
             
-            // Here we can optionally cap the program at a number of instructions 
-            // in order to save time while needing to test with large instruction sequences
-            // without having to step 1 by 1.
-            // Default = Initially disabled with an example value of 50
+            // Optionally cap the program at a number of instructions 
             if (run_capped && cpu->A == capped_value) {
                 exit(0);
             }
             
-            // Here we allow instruction stepping using the ENTER key
+            // Allow instruction stepping using the ENTER key
             if (run_capped) {
                 int c  = getchar();
                 while (c != '\n' && c != EOF) {
@@ -169,51 +190,46 @@ int main() {
             }
 
             cpu_clock(cpu, run_debug, frame_num);
-
+            
         } else {
-            // NOTE: cycles_left is already decremented by the instruction handlers!
-            // Calculate now long that prev 'frame' took (assuming not on instruction 0... if so, we skip this consideration)
-            // Frame count is incremented for each frame after frame 0
+            // Frame handling
             frame_num++;
 
-            // Check how long below a second those 25,166 cycles took, sleep for rest until 1 sec
-            // Stop timer
+            // Calculate how long the frame took
             uint64_t frame_end_time_ns = get_time_ns();
             uint64_t elapsed_time_ns = frame_end_time_ns - frame_start_time_ns;
-            // Check difference between timer value and 1 second
             int64_t sleep_time_ns = FRAME_TIME_PERSEC - elapsed_time_ns;
 
-            // Sleep for that (millisecond format) difference
+            // Sleep for the remaining time to maintain 60fps
             if (sleep_time_ns > 0) {
                 if ((frame_num % 60) == 0) {
-                    printf("CPU: Slept for %d microseconds to retain clock speed.\n", sleep_time_ns / 1000);
+                    printf("CPU: Slept for %lld microseconds to retain clock speed.\n", sleep_time_ns / 1000);
                 }
-                // Convert nanoseconds to microseconds for sleep_microseconds, and sleep
                 sleep_microseconds(sleep_time_ns / 1000);
             } else {
-                // Frame took longer than desired; consider logging or handling lag
+                // Frame took longer than desired
                 printf("CPU: Warning: Frame %d is lagging by %lld ns.\n", frame_num, -sleep_time_ns);
             }
 
-            // Reset cycles_left to 28.166 (Cycles/frame based on 2A03 at 60Hz)
+            // Reset cycles_left to cycles per frame
             cpu->cycles_left = CYCLES_PER_FRAME;
             
-            // Start timer for frame-time
+            // Start timer for the next frame
             frame_start_time_ns = get_time_ns();
         }
 
-        // Run 3 PPU Cycles for every 1 cpu cycle
+        // Run 3 PPU Cycles for every 1 CPU cycle
         for (size_t i = 1; i <= 3; i++) {
-            //printf("PPU CYCLE %d/3 AT CPU CYCLE %d\n", i, cycle_num);
-            
             ppu_clock(ppu);
         }
+
+        
     }
 
     // Cleanup
     free(cpu);
+    free(ppu);
     free(bus);
-    // Might need to add any additional cleanup for the Bus if necessary, in the future...
 
     return 0;
 }

@@ -425,10 +425,10 @@ void initialize_interrupt_vectors(Bus* bus) {
 Cpu* init_cpu(Bus* bus) {
     Cpu* cpu = (Cpu*)malloc(sizeof(Cpu));
     if (!cpu) {
-        fprintf(stderr, "CPU: Error, Failed to allocate memory for the CPU.\n");
+        fprintf(stderr, "[CPU] Error, Failed to allocate memory for the CPU.\n");
         exit(1);
     }
-    printf("CPU: CPU allocated!\n");
+    printf("[CPU] CPU allocated!\n");
 
     // Initialize CPU registers
     cpu->A = 0;
@@ -444,7 +444,7 @@ Cpu* init_cpu(Bus* bus) {
     // Initialize interrupt vectors
     initialize_interrupt_vectors(bus);
 
-    printf("CPU: CPU Initialised!\n");
+    printf("[CPU] CPU Initialised!\n");
     return cpu;
 }
 
@@ -665,13 +665,13 @@ void cpu_clock(Cpu* cpu, bool run_debug, int frame_num) {
             break;
         default:
             // Handle illegal or undefined opcode(s)
-            printf("CPU: Error, Encountered illegal or undefined opcode: 0x%02X at PC: 0x%04X\n", opcode, cpu->PC - 1);
+            printf("[CPU] Error, Encountered illegal or undefined opcode: 0x%02X at PC: 0x%04X\n", opcode, cpu->PC - 1);
             cpu->running = false;
             break;
     }
 
     if (run_debug) {
-        printf("CPU: Instruction %d: \n", frame_num);
+        printf("[CPU] Instruction %d: \n", frame_num);
         printf("Current Opcode: %02x\n", opcode);
         printf("\n");
         print_instruction(cpu, current_opcode, next_opcode);

@@ -9,19 +9,19 @@
 
 int main() {
     if(SDL_Init(SDL_INIT_VIDEO) < 0){
-        printf("DISPLAY: SDL failed to initialize\n SDL Error: '%s'\n", SDL_GetError());
+        printf("[DISPLAY] SDL failed to initialize\n SDL Error: '%s'\n", SDL_GetError());
         return 1;
     }
 
     SDL_Window *window = SDL_CreateWindow("SLD test", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, SCREEN_WIDTH * SCREEN_SCALE, SCREEN_HEIGHT * SCREEN_SCALE, 0);
     if(!window){
-        printf("DISPLAY: Failed to open window\n SDL Error: '%s'\n", SDL_GetError());
+        printf("[DISPLAY] Failed to open window\n SDL Error: '%s'\n", SDL_GetError());
         return 1;
     }
 
     SDL_Renderer *renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
     if(!renderer){
-        printf("DISPLAY: Failed to create renderer\n SDL Error: '%s'\n", SDL_GetError());
+        printf("[DISPLAY] Failed to create renderer\n SDL Error: '%s'\n", SDL_GetError());
         return 1;
     }
 
