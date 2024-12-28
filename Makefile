@@ -1,2 +1,2 @@
 all:
-	gcc -I sdl/include -L sdl/lib -o display Display.c -lSDL2main -lSDL2
+	gcc -o test src/Main.c src/holbroow6502.c src/Bus.c src/PPU.c src/Cartridge.c -O3

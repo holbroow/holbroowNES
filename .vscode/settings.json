@@ -57,9 +57,6 @@
   "C_Cpp_Runner.useLinkTimeOptimization": false,
   "C_Cpp_Runner.msvcSecureNoWarnings": false,
   "files.associations": {
-    "bus.h": "c",
-    "stdbool.h": "c",
-    "stdlib.h": "c",
-    "stdio.h": "c"
+    "stdint.h": "c"
   }
 }
