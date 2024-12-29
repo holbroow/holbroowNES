@@ -57,6 +57,11 @@
   "C_Cpp_Runner.useLinkTimeOptimization": false,
   "C_Cpp_Runner.msvcSecureNoWarnings": false,
   "files.associations": {
-    "stdint.h": "c"
+    "stdint.h": "c",
+    "raylib.h": "c",
+    "stdio.h": "c",
+    "ctype.h": "c",
+    "bus.h": "c",
+    "string.h": "c"
   }
 }
