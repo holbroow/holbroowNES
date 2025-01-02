@@ -92,8 +92,10 @@ static const uint32_t NES_PALETTE[64] = {
 };
 
 // Update the make_colour function to use the NES palette
-static inline uint32_t make_colour(uint8_t i) {
-    // Mask the index to ensure it's within 0-63
+static inline uint16_t make_colour(uint8_t i) {
+    // Mask the index to ensure an index of 0-63
+    // Convert colour in NES palette to colour that SDL can understand
+        // I believe SDL understand colours as a 32 bit integer eg. 0x FF FF FF FF.
     uint8_t index = i & 0x3F;
     return 0xFF000000 | NES_PALETTE[index];
 }
@@ -123,9 +125,9 @@ Ppu* init_ppu() {
 void connect_ppu_cart(Ppu* ppu, Cartridge* cart) {
     ppu->cart = cart;
     // Initialize CHR Data
-    if (ppu->cart->chr_rom_banks > 0) {
-        ppu->chr_data = ppu->cart->chr_rom;
-        ppu->chr_size = ppu->cart->chr_rom_size;
+    if (ppu->cart->nCHRBanks > 0) {
+        ppu->chr_data = ppu->cart->CHRMemory;
+        ppu->chr_size = sizeof(ppu->cart->CHRMemory);
         ppu->chr_ram = false;
         printf("PPU: Using CHR ROM (%zu KB)\n", ppu->chr_size / 1024);
     } else {
@@ -141,16 +143,6 @@ void connect_ppu_cart(Ppu* ppu, Cartridge* cart) {
         ppu->chr_ram = true;
         printf("PPU: Using CHR RAM (%zu KB)\n", ppu->chr_size / 1024);
     }
-}
-
-// Free the PPU
-void free_ppu(Ppu* ppu) {
-    free(ppu);
-}
-
-// Get the framebuffer for rendering
-uint32_t* ppu_get_framebuffer(Ppu* ppu) {
-    return ppu->framebuffer;
 }
 
 // Check if a frame is done

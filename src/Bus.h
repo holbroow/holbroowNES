@@ -19,14 +19,9 @@ BUS - 0x0000 - 0xFFFF
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////*/
 
-// Define the memory size for the bus (64KB for 16-bit addressing)
-#define BUS_MEMORY_SIZE 65535  // 65535 Bytes of addressable memory
-#define ROM_MEMORY_SIZE 49126  // ROM size
-#define PPU_MEMORY_SIZE 16384  // PPU memory size (no longer needed in Bus)
-
 // Define the Bus structure
 typedef struct Bus {
-    uint8_t bus_memory[BUS_MEMORY_SIZE];  // System RAM
+    uint8_t main_memory[2048];  // System RAM
     Ppu* ppu;                             // Reference to PPU
     Cartridge* cart;                      // Reference to Cartridge
 } Bus;
@@ -34,8 +29,8 @@ typedef struct Bus {
 // Function to initialize the bus
 Bus* init_bus();
 
-// Function to write data to the bus
+// Function to write data to the main bus
 void bus_write(Bus* bus, uint16_t address, uint8_t data);
 
-// Function to read data from the bus
+// Function to read data from the main bus
 uint8_t bus_read(Bus* bus, uint16_t address);

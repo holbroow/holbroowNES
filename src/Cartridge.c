@@ -1,202 +1,139 @@
 #include "Cartridge.h"
+#include "Mapper.h"
 
-Cartridge* init_cart(const char* filepath) {
-    FILE* file = fopen(filepath, "rb");
-    if (!file) {
-        fprintf(stderr, "[Cartridge] Failed to open file %s\n", filepath);
+typedef struct iNesHeader {
+    char asciiNes[4];
+    uint8_t PRG_chunks;
+    uint8_t CHR_chunks;
+    uint8_t mapper1;
+    uint8_t mapper2;
+    uint8_t PRG_ramSize;
+    uint8_t tvSystem1;
+    uint8_t tvSystem2;
+    char unusedPadding[5];
+} iNesHeader;
+
+
+Vector *VectorCreate(size_t initialCapacity) {
+    Vector *vector = (Vector*)malloc(sizeof(Vector));
+    if (!vector) { 
+        fprintf(stderr, "Could't allocate space for the vector\n");
         exit(1);
     }
-    printf("[Cartridge] Loading .nes file '%s'...\n", filepath);
-
-    Cartridge* cart = malloc(sizeof(Cartridge));
-    if (!cart) {
-        fprintf(stderr, "[Cartridge] Memory allocation failed\n");
-        fclose(file);
+    vector->items = (uint8_t*)malloc(initialCapacity*sizeof(uint8_t));
+    if (!vector->items) {
+        fprintf(stderr, "Could't allocate space for the items of the vector\n");
         exit(1);
     }
-
-    // Read header (16 bytes)
-    size_t bytes_read = fread(cart->magic, sizeof(char), 4, file);
-    if (bytes_read != 4) {
-        fprintf(stderr, "[Cartridge] Failed to read magic number\n");
-        free(cart);
-        fclose(file);
-        exit(1);
-    }
-
-    // Verify magic number
-    if (cart->magic[0] != 'N' || cart->magic[1] != 'E' || cart->magic[2] != 'S' || cart->magic[3] != 0x1A) {
-        fprintf(stderr, "[Cartridge] Invalid magic number. Not a valid .nes file.\n");
-        free(cart);
-        fclose(file);
-        exit(1);
-    }
-
-    // Read remaining header bytes (12 bytes)
-    bytes_read = fread(&cart->prg_rom_banks, sizeof(uint8_t), 12, file);
-    if (bytes_read != 12) {
-        fprintf(stderr, "[Cartridge] Failed to read complete header\n");
-        free(cart);
-        fclose(file);
-        exit(1);
-    }
-
-    // Parse flags
-    cart->flags6 = cart->prg_rom_banks;
-    cart->prg_rom_banks = cart->prg_rom_banks; // Already read
-    cart->chr_rom_banks = cart->chr_rom_banks; // Already read
-    cart->flags7 = cart->flags6; // Correction needed
-    // The above lines need correction. Re-reading to parse correctly.
-
-    // Correct parsing after reading all 16 bytes
-    // Let's reset the reading sequence
-
-    // Reset file pointer to start
-    fseek(file, 0, SEEK_SET);
-
-    uint8_t header[16];
-    bytes_read = fread(header, sizeof(uint8_t), 16, file);
-    if (bytes_read != 16) {
-        fprintf(stderr, "[Cartridge] Failed to read complete header\n");
-        free(cart);
-        fclose(file);
-        exit(1);
-    }
-
-    // Assign header fields
-    cart->prg_rom_banks = header[4];
-    cart->chr_rom_banks = header[5];
-    cart->flags6 = header[6];
-    cart->flags7 = header[7];
-    cart->flags8 = header[8];
-    cart->flags9 = header[9];
-    cart->flags10 = header[10];
-    for (int i = 11; i < 16; i++) {
-        cart->padding[i - 11] = header[i];
-    }
-
-    // Parse mapper number
-    cart->mapper = (header[7] & 0xF0) | ((header[6] & 0xF0) >> 4);
-
-    // Parse flags
-    cart->mirroring = (header[6] & 0x01) ? true : false;
-    cart->battery = (header[6] & 0x02) ? true : false;
-    cart->has_trainer = (header[6] & 0x04) ? true : false;
-    cart->four_screen = (header[6] & 0x08) ? true : false;
-
-    // NES 2.0 flag
-    cart->nes2 = (header[7] & 0x0C) == 0x08 ? true : false;
-
-    // Check for NES 2.0
-    if (cart->nes2) {
-        // Handle NES 2.0 specific parsing if necessary
-        fprintf(stderr, "[Cartridge] NES 2.0 format not supported yet.\n");
-        // Implement NES 2.0 parsing here
-        free(cart->prg_rom);
-        free(cart->chr_rom);
-        free(cart);
-        fclose(file);
-        exit(1);
-    }
-
-    // Read Trainer if present
-    if (cart->has_trainer) {
-        bytes_read = fread(cart->trainer, sizeof(uint8_t), TRAINER_SIZE, file);
-        if (bytes_read != TRAINER_SIZE) {
-            fprintf(stderr, "[Cartridge] Failed to read trainer data\n");
-            free(cart);
-            fclose(file);
-            exit(1);
-        }
-    }
-
-    // Calculate PRG ROM size
-    cart->prg_rom_size = cart->prg_rom_banks * 16 * 1024; // 16KB per bank
-    if (cart->prg_rom_size > MAX_PRG_ROM_SIZE) {
-        fprintf(stderr, "[Cartridge] PRG ROM size exceeds maximum supported size.\n");
-        free(cart);
-        fclose(file);
-        exit(1);
-    }
-
-    // Allocate memory for PRG ROM
-    cart->prg_rom = malloc(cart->prg_rom_size);
-    if (!cart->prg_rom) {
-        fprintf(stderr, "[Cartridge] Failed to allocate memory for PRG ROM\n");
-        free(cart);
-        fclose(file);
-        exit(1);
-    }
-
-    // Read PRG ROM data
-    bytes_read = fread(cart->prg_rom, sizeof(uint8_t), cart->prg_rom_size, file);
-    if (bytes_read != cart->prg_rom_size) {
-        fprintf(stderr, "[Cartridge] Failed to read PRG ROM data\n");
-        free(cart->prg_rom);
-        free(cart);
-        fclose(file);
-        exit(1);
-    }
-
-    // Calculate CHR ROM size
-    cart->chr_rom_size = cart->chr_rom_banks * 8 * 1024; // 8KB per bank
-    if (cart->chr_rom_size > MAX_CHR_ROM_SIZE) {
-        fprintf(stderr, "[Cartridge] CHR ROM size exceeds maximum supported size.\n");
-        free(cart->prg_rom);
-        free(cart);
-        fclose(file);
-        exit(1);
-    }
-
-    // Allocate memory for CHR ROM
-    if (cart->chr_rom_banks > 0) {
-        cart->chr_rom = malloc(cart->chr_rom_size);
-        if (!cart->chr_rom) {
-            fprintf(stderr, "[Cartridge] Failed to allocate memory for CHR ROM\n");
-            free(cart->prg_rom);
-            free(cart);
-            fclose(file);
-            exit(1);
-        }
-
-        // Read CHR ROM data
-        bytes_read = fread(cart->chr_rom, sizeof(uint8_t), cart->chr_rom_size, file);
-        if (bytes_read != cart->chr_rom_size) {
-            fprintf(stderr, "[Cartridge] Failed to read CHR ROM data\n");
-            free(cart->chr_rom);
-            free(cart->prg_rom);
-            free(cart);
-            fclose(file);
-            exit(1);
-        }
-    } else {
-        // Some cartridges use CHR RAM instead of CHR ROM
-        cart->chr_rom = NULL;
-    }
-
-    fclose(file);
-
-    printf("[Cartridge] Loaded %d PRG ROM banks (%zu KB)\n", cart->prg_rom_banks, cart->prg_rom_size / 1024);
-    printf("[Cartridge] Loaded %d CHR ROM banks (%zu KB)\n", cart->chr_rom_banks, cart->chr_rom_size / 1024);
-    printf("[Cartridge] Mapper #%d\n", cart->mapper);
-    printf("[Cartridge] Mirroring: %s\n", cart->mirroring ? "Vertical" : "Horizontal");
-    if (cart->has_trainer) {
-        printf("[Cartridge] Trainer present\n");
-    }
-    if (cart->battery) {
-        printf("[Cartridge] Battery-backed RAM present\n");
-    }
-    if (cart->four_screen) {
-        printf("[Cartridge] Four-screen mirroring true\n");
-    }
-
-    printf("[Cartridge] Successfully loaded '%s'!\n", filepath);
-    return cart;
+    vector->size = 0;
+    vector->capacity = initialCapacity;
+    return vector;
 }
 
-void free_cart(Cartridge* cart) {
-    if (!cart) return;
-    if (cart->prg_rom) free(cart->prg_rom);
-    if (cart->chr_rom) free(cart->chr_rom);
-    free(cart);
+
+Cartridge* init_cart(const char* filepath) {
+    // Attempt to open .nes file
+    FILE* file = fopen(filepath, "rb");
+    if (file == NULL) {
+        fprintf(stderr, "[CARTRIDGE] Error opening '%s' file\n", filepath);
+        exit(1);
+    }
+
+    // Create header storage and store the 'iNesHeader' from the file
+    iNesHeader header = {0};
+    size_t bytes = fread(&header, sizeof(iNesHeader), 1, file);
+
+    // If we find training information, ignore it as we dont need it :0)
+    if (header.mapper1 & 0x04)
+        fseek(file, 512, SEEK_CUR);
+
+    // Now we read in the good stuff... the main cartridge contents
+    Cartridge *cartridge = (Cartridge*)malloc(sizeof(Cartridge));
+    if (!cartridge) { 
+        fprintf(stderr, "[CARTRIDGE] Couldn't allocate space for the cartridge\n");
+        exit(1);
+    }
+    // Creaate space for relevant cartridge data
+    cartridge->PRGMemory = VectorCreate(16384*header.PRG_chunks);
+    cartridge->CHRMemory = VectorCreate(8192*header.CHR_chunks);
+    cartridge->nPRGBanks = header.PRG_chunks;
+    cartridge->nCHRBanks = header.CHR_chunks;
+    cartridge->mapperID = ((header.mapper2 >> 4) << 4) | (header.mapper1 >> 4);
+    cartridge->mirror = (header.mapper1 & 0x01) ? VERTICAL : HORIZONTAL;
+
+    // Store said cartridge data from file, and print for debugging purposes
+    printf("[CARTRIDGE] PRG_chunks = %d\n", header.PRG_chunks);
+    printf("[CARTRIDGE] CHR_chunks = %d\n", header.CHR_chunks);
+    bytes = fread(cartridge->PRGMemory->items, sizeof(uint8_t), 16384*header.PRG_chunks, file);
+    printf("[CARTRIDGE] PRGMemory read = %d\n", bytes);
+    bytes = fread(cartridge->CHRMemory->items, sizeof(uint8_t), 8192*header.CHR_chunks, file);
+    printf("[CARTRIDGE] CHRMemory read = %d\n", bytes);
+
+    // Close file as it is no longer needed
+    if (fclose(file) != 0) {
+        fprintf(stdout, "[CARTRIDGE] Error closing the file\n");
+        exit(1);
+    }
+
+    // Create mapper and load ROM into it depending on its Mapper ID
+    // TODO: Implement further mapper IDs
+    cartridge->mapper = MapperCreate(cartridge->nPRGBanks, cartridge->nCHRBanks);
+    switch (cartridge->mapperID) {
+        case 0:
+            MapperLoadNROM(cartridge->mapper);
+            break;
+        default: printf("[CARTRIDGE] Mapper ID not implemented"); 
+            break;
+    }
+    
+    // Return the completed cartridge!
+    return cartridge;
+}
+
+bool cartridge_cpu_read(Cartridge *cartridge, uint16_t addr, uint8_t* data) {
+    uint32_t mapped_address = 0;
+    Mapper *mapper = cartridge->mapper;
+
+    if (mapper->MapperCpuRead(mapper, addr, &mapped_address)) {
+        *data = cartridge->PRGMemory->items[mapped_address];
+        return true;
+    }
+
+    return false;
+}
+
+bool cartridge_cpu_write(Cartridge *cartridge, uint16_t addr, uint8_t data) {
+    uint32_t mapped_address = 0;
+    Mapper *mapper = cartridge->mapper;
+
+    if (mapper->MapperCpuWrite(mapper, addr, &mapped_address)) {
+        cartridge->PRGMemory->items[mapped_address] = data;
+        return true;
+    }
+
+    return false;
+}
+
+bool cartridge_ppu_read(Cartridge *cartridge, uint16_t addr, uint8_t* data) {
+    uint32_t mapped_address = 0;
+    Mapper *mapper = cartridge->mapper;
+
+    if (mapper->MapperPpuRead(mapper, addr, &mapped_address)) {
+        *data = cartridge->CHRMemory->items[mapped_address];
+        return true;
+    }
+
+    return false;
+}
+
+bool cartridge_ppu_write(Cartridge *cartridge, uint16_t addr, uint8_t data) {
+    uint32_t mapped_address = 0;
+    Mapper *mapper = cartridge->mapper;
+
+    if (mapper->MapperPpuWrite(mapper, addr, &mapped_address)) {
+        cartridge->CHRMemory->items[mapped_address] = data;
+        return true;
+    }
+
+    return false;
 }

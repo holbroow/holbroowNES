@@ -52,7 +52,7 @@ typedef struct Ppu {
     uint8_t secondary_OAM[32];  // Secondary OAM for sprite evaluation
 
     // Framebuffer
-    uint32_t framebuffer[PPU_SCREEN_WIDTH * PPU_SCREEN_HEIGHT];
+    uint16_t framebuffer[PPU_SCREEN_WIDTH * PPU_SCREEN_HEIGHT];
 
     // Internal PPU memory
     uint8_t pattern_tables[0x2000];   // 0x0000 - 0x1FFF
@@ -60,7 +60,7 @@ typedef struct Ppu {
     uint8_t palettes[0x20];            // 0x3F00 - 0x3F1F
 
     // CHR Data
-    uint8_t* chr_data;       // Pointer to CHR ROM or CHR RAM
+    Vector* chr_data;       // Pointer to CHR ROM or CHR RAM
     size_t chr_size;         // Size of CHR data
     bool chr_ram;            // Indicates if CHR RAM is used
 
@@ -100,7 +100,6 @@ typedef struct Ppu {
 Ppu* init_ppu();
 void connect_chr_data(Ppu* ppu, Cartridge* cart);
 
-void free_ppu(Ppu* ppu);
 void ppu_clock(Ppu* ppu);
 bool ppu_is_frame_done(Ppu* ppu);
 void ppu_clear_frame_done(Ppu* ppu);
@@ -112,6 +111,3 @@ void ppu_write(Ppu* ppu, uint16_t address, uint8_t value);
 // For CPU NMI check
 bool ppu_nmi_occurred(Ppu* ppu);
 void ppu_clear_nmi(Ppu* ppu);
-
-// Get framebuffer
-uint32_t* ppu_get_framebuffer(Ppu* ppu);

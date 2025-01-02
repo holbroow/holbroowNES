@@ -12,14 +12,14 @@
 #define FRAME_TIME_PERSEC (1000000000LL / 60)                   // Frame time in nanoseconds
 
 // Status flags
-#define FLAG_CARRY      0x01
-#define FLAG_ZERO       0x02
-#define FLAG_INTERRUPT  0x04
-#define FLAG_DECIMAL    0x08
-#define FLAG_BREAK      0x10
-#define FLAG_UNUSED     0x20
-#define FLAG_OVERFLOW   0x40
-#define FLAG_NEGATIVE   0x80
+#define FLAG_CARRY              0x01
+#define FLAG_ZERO               0x02
+#define FLAG_INTERRUPT_DISABLE  0x04
+#define FLAG_DECIMAL            0x08
+#define FLAG_BREAK              0x10
+#define FLAG_UNUSED             0x20
+#define FLAG_OVERFLOW           0x40
+#define FLAG_NEGATIVE           0x80
 
 // CPU Structure
 typedef struct Cpu {
@@ -36,7 +36,10 @@ typedef struct Cpu {
     // Bus
     Bus* bus;   // Reference to the bus
 
-    // Cycle counter
+    // Cycles occured since reset
+    int cycle_count;
+
+    // Cycles remaining until 'finished;
     int cycles_left;
 } Cpu;
 
@@ -150,6 +153,10 @@ Cpu* init_cpu(Bus* bus);
 // Function to run a single CPU clock cycle
 void cpu_clock(Cpu* cpu, bool run_debug, int i);
 
+void cpu_reset(Cpu* cpu, Bus* bus);
+void cpu_nmi(Cpu* cpu, Bus* bus);
+void cpu_irq(Cpu* cpu, Bus* bus);
+
 // Function to print the state of the CPU's current state (registers)
 void print_cpu(Cpu* cpu);
 
@@ -216,7 +223,7 @@ void handle_RTI(Cpu* cpu, uint8_t opcode);
 
 // Helper functions
 uint8_t fetch_operand(Cpu* cpu, AddressingMode mode, uint16_t* address);
-void set_zero_flag(Cpu* cpu, uint8_t value);
+void set_zero_flag(Cpu* cpu, bool set);
 void set_negative_flag(Cpu* cpu, uint8_t value);
 void set_carry_flag(Cpu* cpu, bool set);
 void set_overflow_flag(Cpu* cpu, bool set);
