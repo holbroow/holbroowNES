@@ -792,7 +792,7 @@ void handle_LDA(Cpu* cpu, uint8_t opcode) {
     set_zero_flag(cpu, cpu->A == 0x00);
     set_negative_flag(cpu, cpu->A & 0x80);
 
-    // If ABX or ABY, check page crossing
+    // Check page crossing
     if (mode == ABX) {
         uint16_t base = address - cpu->X;
         if (page_crossed(base, address)) {
@@ -818,7 +818,7 @@ void handle_LDX(Cpu* cpu, uint8_t opcode) {
     set_zero_flag(cpu, cpu->X == 0x00);
     set_negative_flag(cpu, cpu->X & 0x80);
 
-    // LDX uses ABY for page crossing check
+    // Check page crossing
     if (mode == ABY) {
         uint16_t base = address - cpu->Y;
         if (page_crossed(base, address)) {
@@ -839,7 +839,7 @@ void handle_LDY(Cpu* cpu, uint8_t opcode) {
     set_zero_flag(cpu, cpu->Y == 0x00);
     set_negative_flag(cpu, cpu->Y & 0x80);
 
-    // LDY uses ABX for page crossing check
+    // Check page crossing
     if (mode == ABX) {
         uint16_t base = address - cpu->X;
         if (page_crossed(base, address)) {
@@ -1058,7 +1058,7 @@ void handle_AND(Cpu* cpu, uint8_t opcode) {
     set_zero_flag(cpu, cpu->A == 0x00);
     set_negative_flag(cpu, cpu->A & 0x80);
 
-    // Check page crossing if ABX or ABY
+    // Check page crossing
     if (mode == ABX) {
         uint16_t base = address - cpu->X;
         if (page_crossed(base, address)) cpu->cycles_left += 1;
@@ -1079,6 +1079,7 @@ void handle_EOR(Cpu* cpu, uint8_t opcode) {
     set_zero_flag(cpu, cpu->A == 0x00);
     set_negative_flag(cpu, cpu->A & 0x80);
 
+    // Check page crossing
     if (mode == ABX) {
         uint16_t base = address - cpu->X;
         if (page_crossed(base, address)) cpu->cycles_left += 1;
@@ -1099,6 +1100,7 @@ void handle_ORA(Cpu* cpu, uint8_t opcode) {
     set_zero_flag(cpu, cpu->A == 0x00);
     set_negative_flag(cpu, cpu->A & 0x80);
 
+    // Check page crossing
     if (mode == ABX) {
         uint16_t base = address - cpu->X;
         if (page_crossed(base, address)) cpu->cycles_left += 1;
@@ -1148,6 +1150,7 @@ void handle_ADC(Cpu* cpu, uint8_t opcode) {
 	// Load the result into the accumulator (it's 8-bit dont forget!)
 	cpu->A = temp & 0x00FF;
 
+    // Check page crossing
     if (mode == ABX) {
         uint16_t base = address - cpu->X;
         if (page_crossed(base, address)) cpu->cycles_left += 1;
@@ -1175,6 +1178,7 @@ void handle_SBC(Cpu* cpu, uint8_t opcode) {
 	set_negative_flag(cpu, temp & 0x0080);
 	cpu->A = temp & 0x00FF;
 
+    // Check page crossing
     if (mode == ABX) {
         uint16_t base = address - cpu->X;
         if (page_crossed(base, address)) cpu->cycles_left -= 1;
@@ -1197,6 +1201,7 @@ void handle_CMP(Cpu* cpu, uint8_t opcode) {
     set_zero_flag(cpu, (result & 0x00FF) == 0x0000);
     set_negative_flag(cpu, result & 0x0080);
 
+    // Check page crossing
     if (mode == ABX) {
         uint16_t base = address - cpu->X;
         if (page_crossed(base, address)) cpu->cycles_left -= 1;
@@ -1245,6 +1250,7 @@ void handle_INC(Cpu* cpu, uint8_t opcode) {
     set_zero_flag(cpu, (temp & 0x00FF) == 0x0000);
     set_negative_flag(cpu, temp & 0x0080);
 
+    // Check page crossing
     if (mode == ABX) {
         uint16_t base = address - cpu->X;
         if (page_crossed(base, address)) cpu->cycles_left -= 1;
@@ -1280,6 +1286,7 @@ void handle_DEC(Cpu* cpu, uint8_t opcode) {
     set_zero_flag(cpu, (temp & 0x00FF) == 0x0000);
     set_negative_flag(cpu, temp & 0x0080);
 
+    // Check page crossing
     if (mode == ABX) {
         uint16_t base = address - cpu->X;
         if (page_crossed(base, address)) cpu->cycles_left -= 1;
@@ -1328,7 +1335,6 @@ void handle_ASL(Cpu* cpu, uint8_t opcode) {
     } else {
         bus_write(cpu->bus, address, value);
     }
-    // ASL does not add extra cycles for page crossing
 }
 
 void handle_LSR(Cpu* cpu, uint8_t opcode) {
@@ -1358,7 +1364,6 @@ void handle_LSR(Cpu* cpu, uint8_t opcode) {
     } else {
         bus_write(cpu->bus, address, temp & 0x00FF);
     }
-    // LSR does not add extra cycles for page crossing
 }
 
 void handle_ROL(Cpu* cpu, uint8_t opcode) {
@@ -1387,7 +1392,6 @@ void handle_ROL(Cpu* cpu, uint8_t opcode) {
     } else {
         bus_write(cpu->bus, address, value);
     }
-    // ROL does not add extra cycles for page crossing
 }
 
 void handle_ROR(Cpu* cpu, uint8_t opcode) {
@@ -1417,7 +1421,6 @@ void handle_ROR(Cpu* cpu, uint8_t opcode) {
     } else {
         bus_write(cpu->bus, address, value);
     }
-    // ROR does not add extra cycles for page crossing
 }
 
 void handle_JMP(Cpu* cpu, uint8_t opcode) {
