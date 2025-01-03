@@ -165,7 +165,7 @@ void ppu_clear_nmi(Ppu* ppu) {
     ppu->nmi_occurred = false;
 }
 
-// Read a PPU register from CPU
+// Read a PPU register
 uint8_t ppu_read(Ppu* ppu, uint16_t address) {
     address &= 0x2007; 
     switch (address) {

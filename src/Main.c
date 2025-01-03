@@ -100,7 +100,7 @@ void init_nes() {
     uint16_t reset_low = bus_read(bus, 0xFFFC);
     uint16_t reset_high = bus_read(bus, 0xFFFD);
     uint16_t reset_vector = (reset_high << 8) | reset_low;
-    cpu->PC = 0xc000;   // Normally set to reset_vector value unless modified for a test case etc...
+    cpu->PC = reset_vector;   // Normally set to reset_vector value unless modified for a test case etc...
     printf("[MANAGER] CPU PC set to reset vector 0x%04X\n", cpu->PC);
 }
 
@@ -172,7 +172,6 @@ int main(int argc, char* argv[]) {
     printf("[CPU] Current CPU State:\n");
     print_cpu(cpu);
     
-    bus_write(bus, 0x0002, 0x50);
     uint16_t lastPC = cpu->PC;
 
     // Run the NES!
@@ -192,17 +191,9 @@ int main(int argc, char* argv[]) {
             //printf("\n");
         }
 
-        if (cpu->PC == 0xC66E) {
-            cpu->running = false;
-        }
-
-        // If a result is found in the memory address, stop the CPU!
-        if(bus_read(bus, 0x0002) != 0x50) {
-            cpu->running = false;
-        }
 
         // After a number of cycles (maybe cycles??? not sure...) update the display
-        if (nes_cycles_passed >= 100000) { // TODO: Need to figure this value out -  need for timing + when to update display???
+        if (nes_cycles_passed % 30000 == 0) { // TODO: Need to figure this value out -  need for timing + when to update display???
             // Update Display
             SDL_UpdateTexture(texture, 0, ppu->framebuffer, 512);
             SDL_RenderCopy(renderer, texture, 0, 0);

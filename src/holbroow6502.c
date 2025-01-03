@@ -437,17 +437,6 @@ uint8_t pull_stack(Cpu* cpu) {
     return bus_read(cpu->bus, 0x0100 + cpu->SP);
 }
 
-// // Initialize interrupt vectors
-// void initialize_interrupt_vectors(Bus* bus) {
-//     // NMI Vector: 0xFFFA and 0xFFFB
-//     bus_write(bus, 0xFFFA, 0x00); // Low byte of NMI handler
-//     bus_write(bus, 0xFFFB, 0x80); // High byte of NMI handler (e.g., 0x8000)
-
-//     // IRQ Vector: 0xFFFE and 0xFFFF
-//     bus_write(bus, 0xFFFE, 0x00); // Low byte of IRQ handler
-//     bus_write(bus, 0xFFFF, 0x80); // High byte of IRQ handler (e.g., 0x8000)
-// }
-
 // CPU Initialization and helper functions
 Cpu* init_cpu(Bus* bus) {
     Cpu* cpu = (Cpu*)malloc(sizeof(Cpu));
@@ -468,9 +457,6 @@ Cpu* init_cpu(Bus* bus) {
     cpu->running = true;
     cpu->cycle_count = 0;
     cpu->cycles_left = 0;
-
-    // // Initialize interrupt vectors
-    // initialize_interrupt_vectors(bus);
 
     printf("[CPU] CPU Initialised!\n");
     return cpu;
@@ -533,7 +519,7 @@ void cpu_clock(Cpu* cpu, bool run_debug, int frame_num) {
         // printf("PC: %d\n", cpu->PC);
         //for (volatile int i = 0; i < 50000000; i++);
         
-         printf("PC: %02X |  %s  |  A:%02x |  X:%02x |  Y:%02x |  SP:%04x | %d\n", cpu->PC-1, InstructionStrings[current_opcode.instruction], cpu->A, cpu->X, cpu->Y, cpu->SP, cpu->cycle_count);
+        printf("PC: %02X |  %s  |  A:%02x |  X:%02x |  Y:%02x |  SP:%04x | %d\n", cpu->PC-1, InstructionStrings[current_opcode.instruction], cpu->A, cpu->X, cpu->Y, cpu->SP, cpu->cycle_count);
 
         // NOTE: cpu->cycles_left is decremented within the instruction handlers, happy days!
         switch (current_opcode.instruction) {
@@ -779,7 +765,8 @@ void cpu_nmi(Cpu* cpu, Bus* bus) {
 }
 
 
-// The implemented '6502' 56 Instruction Set
+// The fully implemented '6502' 56 'Official' Instruction Set
+// No extra 'un-official' opcodes have been implemented as of yet...
 void handle_LDA(Cpu* cpu, uint8_t opcode) {
     cpu->cycles_left += opcode_table[opcode].cycles;
 
