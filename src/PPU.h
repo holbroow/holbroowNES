@@ -2,6 +2,7 @@
 #pragma once
 
 #include "Cartridge.h"
+
 #include <stdint.h>
 #include <stdbool.h>
 
@@ -28,86 +29,34 @@ typedef struct {
     uint8_t PPUSCROLL; // $2005 (latches)
     uint8_t PPUADDR;   // $2006 (latches)
     uint8_t PPUDATA;   // $2007
-    uint8_t OAMDMA;    // not directly in PPU reg space, but used by CPU to write OAM
+    uint8_t OAMDMA;    // ($4014) not directly in PPU reg space, but used by CPU to write OAM
 } PpuRegisters;
 
 // Sprite data structure
 typedef struct {
-    uint8_t y;
-    uint8_t tile_index;
-    uint8_t attributes;
-    uint8_t x;
+
+
 } Sprite;
 
 // PPU structure
 typedef struct Ppu {
-    // VRAM address registers (15-bit)
-    uint16_t v;  // current VRAM address
-    uint16_t t;  // temporary VRAM address
-    uint8_t  x;  // fine X scroll (3 bits)
-    bool w;      // write toggle for PPUSCROLL/PPUADDR
 
-    // OAM
-    uint8_t OAM[256];           // Primary OAM
-    uint8_t secondary_OAM[32];  // Secondary OAM for sprite evaluation
 
-    // Framebuffer
-    uint16_t framebuffer[PPU_SCREEN_WIDTH * PPU_SCREEN_HEIGHT];
-
-    // Internal PPU memory
-    uint8_t pattern_tables[0x2000];   // 0x0000 - 0x1FFF
-    uint8_t nametables[0x1000];       // 0x2000 - 0x2FFF
-    uint8_t palettes[0x20];            // 0x3F00 - 0x3F1F
-
-    // CHR Data
-    Vector* chr_data;       // Pointer to CHR ROM or CHR RAM
-    size_t chr_size;         // Size of CHR data
-    bool chr_ram;            // Indicates if CHR RAM is used
-
-    // Latches for fetching background data
-    uint8_t nametable_byte;
-    uint8_t attribute_byte;
-    uint8_t low_pattern_byte;
-    uint8_t high_pattern_byte;
-
-    // Shift registers for background
-    uint16_t pattern_shift_low;
-    uint16_t pattern_shift_high;
-    uint16_t attribute_shift_low;
-    uint16_t attribute_shift_high;
-
-    // Sprite rendering data
-    Sprite sprite_data[8]; // sprite data for current scanline
-    uint8_t sprite_count;
-    uint8_t sprite_pattern_low[8];
-    uint8_t sprite_pattern_high[8];
-
-    bool sprite_zero_hit_possible;
-    bool sprite_zero_being_rendered;
-
-    // Cycle, scanline counters
-    int cycle;
-    int scanline;
     bool frame_done;
-    bool nmi_occurred;
-
-    Cartridge* cart;
-
-    PpuRegisters reg;
+    bool nmi_occured;
 } Ppu;
 
-// Function prototypes
+
+
+// Init PPU (+ cartridge with said PPU)
 Ppu* init_ppu();
-void connect_chr_data(Ppu* ppu, Cartridge* cart);
+void connect_cartridge_ppu(Ppu* ppu, Cartridge* cart);
 
+// 'Clock' the PPU
 void ppu_clock(Ppu* ppu);
-bool ppu_is_frame_done(Ppu* ppu);
-void ppu_clear_frame_done(Ppu* ppu);
 
-// External interface for CPU to read/write PPU registers
+// Ability for CPU to read/write PPU registers
 uint8_t ppu_read(Ppu* ppu, uint16_t address);
 void ppu_write(Ppu* ppu, uint16_t address, uint8_t value);
 
-// For CPU NMI check
-bool ppu_nmi_occurred(Ppu* ppu);
-void ppu_clear_nmi(Ppu* ppu);
+

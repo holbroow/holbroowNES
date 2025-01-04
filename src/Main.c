@@ -110,7 +110,7 @@ void init_display() {
     SDL_Init(SDL_INIT_VIDEO);
     renderer = SDL_CreateRenderer(SDL_CreateWindow("holbroowNES test", 50, 50, 1024, 840, SDL_WINDOW_SHOWN),
                                          -1, SDL_RENDERER_PRESENTVSYNC);
-    texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_BGR565,
+    texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA8888,
                                         SDL_TEXTUREACCESS_STREAMING, 256, 224);
 
     bool run_debug = false;
@@ -179,23 +179,13 @@ int main(int argc, char* argv[]) {
 
         // Do 1 NES 'clock'
         nes_clock();
-        
-
-        // Nestest.nes  Debug Register print-out
-        // printf("Value at 0x02h: %02x\n", bus_read(bus, 0x0002));
-        // printf("Value at 0x03h: %02x\n", bus_read(bus, 0x0003));
-        if(cpu->PC != lastPC) {
-            //printf("PC: %02X |  %s  |  A:%02x |  X:%02x |  Y:%02x |  SP:%04x |  PC:%04x |\n", cpu->PC, InstructionStrings[opcode_table[Opcode[cpu->PC]]], cpu->A, cpu->X, cpu->Y, cpu->SP, cpu->PC);
-            lastPC = cpu->PC;
-            
-            //printf("\n");
-        }
 
 
         // After a number of cycles (maybe cycles??? not sure...) update the display
-        if (nes_cycles_passed % 30000 == 0) { // TODO: Need to figure this value out -  need for timing + when to update display???
+        if (cpu->cycle_count % 29780 == 0) { // TODO: Need to figure this value out -  need for timing + when to update display???
             // Update Display
-            SDL_UpdateTexture(texture, 0, ppu->framebuffer, 512);
+            SDL_UpdateTexture(texture, 0, ppu->framebuffer, NES_WIDTH * sizeof(uint32_t));
+            // SDL_RenderClear(renderer);
             SDL_RenderCopy(renderer, texture, 0, 0);
             SDL_RenderPresent(renderer);
 
@@ -212,6 +202,7 @@ int main(int argc, char* argv[]) {
     free(cpu);
     free(ppu);
     free(bus);
+    free(cart);
 
     return 0;
 }
