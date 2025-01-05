@@ -1,4 +1,4 @@
-# holbroow6502
+# holbroowNES
 
 ![C Language](https://img.shields.io/badge/language-C-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
@@ -11,7 +11,7 @@
 
 ## Overview
 
-`holbroow6502` is an implementation of a fully functional NES emulator written in C. This project is part of the SCC 300 Third Year Project at Lancaster University, overseen by Professor Andrew Scott.
+`holbroow6502` is an implementation of a fully functional NES emulator written in C. This project is part of the SCC 300 Third Year Project at Lancaster University, overseen by Professor Andrew Scott. Commit count is low due to a lot of changes on the fly during the development on my machine, at the point of 10 'commits' the project had likely undergone up to 200-300 small, seemingly insignificant changes privately on my machine.
 
 ## Features
 
