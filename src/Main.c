@@ -27,8 +27,8 @@ Cartridge* cart;
 Bus* bus;
 Ppu* ppu;
 Cpu* cpu;
-void* texture;
-void* renderer;
+SDL_Texture* texture;
+SDL_Renderer* renderer;
 int nes_cycles_passed = 0;
 bool cpu_running;
 bool run_debug = false;
@@ -80,10 +80,11 @@ void init_nes() {
     // Initialize Bus
     printf("[MANAGER] Initialising BUS...\n");
     bus = init_bus();
-    printf("[MANAGER] Initialising BUS finished!\n");
     printf("[MANAGER] Assigning Game Cartridge reference to the BUS...\n");
     bus->cart = cart;
-    printf("[MANAGER] Assigned Game Cartridge reference to the BUS!\n");
+    printf("[MANAGER] Assigning Controller 0 (Keyboard) to the BUS...\n");
+    bus->controller[0] = 0x00;
+    printf("[MANAGER] Initialising BUS finished!\n");
 
     // Initialize PPU
     printf("[MANAGER] Initialising PPU...\n");
@@ -111,10 +112,10 @@ void init_nes() {
 void init_display() {
     // Initialise Display
     SDL_Init(SDL_INIT_VIDEO);
-    renderer = SDL_CreateRenderer(SDL_CreateWindow("holbroowNES test", 50, 50, 1024, 840, SDL_WINDOW_SHOWN),
-                                         -1, SDL_RENDERER_PRESENTVSYNC);
+    renderer = SDL_CreateRenderer(SDL_CreateWindow("holbroowNES test", 50, 50, NES_WIDTH * SCALE, NES_HEIGHT * SCALE, SDL_WINDOW_SHOWN),
+                                         -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
     texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA8888,
-                                        SDL_TEXTUREACCESS_STREAMING, 256, 224);
+                                SDL_TEXTUREACCESS_STREAMING, NES_WIDTH, NES_HEIGHT);
 
     bool run_debug = false;
 }
@@ -175,27 +176,43 @@ int main(int argc, char* argv[]) {
     printf("[CPU] Current CPU State:\n");
     print_cpu(cpu);
 
+
     // Run the NES!
     while (cpu->running) {
+        // Handle SDL events
+        for (SDL_Event event; SDL_PollEvent(&event);) {
+            if (event.type == SDL_QUIT) {
+                return 0;
+            }
+        }
+        
+        // Handle any key presses (controller activity)
+        const Uint8 *state = SDL_GetKeyboardState(NULL);
+        bus->controller[0] = 0x00;
+        if (state[SDL_SCANCODE_Z])          bus->controller[0] |= 0x80;    // A        (Key Z)
+        if (state[SDL_SCANCODE_X])          bus->controller[0] |= 0x40;    // B        (Key X)
+        if (state[SDL_SCANCODE_TAB])        bus->controller[0] |= 0x20;    // Select   (Key SELECT)
+        if (state[SDL_SCANCODE_RETURN])     bus->controller[0] |= 0x10;    // Start    (Key ENTER/RETURN)
+        if (state[SDL_SCANCODE_UP])         bus->controller[0] |= 0x08;    // Up       (Key UP ARR)
+        if (state[SDL_SCANCODE_DOWN])       bus->controller[0] |= 0x04;    // Down     (Key DOWN ARR)
+        if (state[SDL_SCANCODE_LEFT])       bus->controller[0] |= 0x02;    // Left     (Key LEFT ARR)
+        if (state[SDL_SCANCODE_RIGHT])      bus->controller[0] |= 0x01;    // Right    (Key RIGHT ARR)
+
 
         // Do 1 NES 'clock'
         nes_clock();
 
 
-        // After a number of cycles (maybe cycles??? not sure...) update the display
-        if (cpu->cycle_count % 29780 == 0) { // TODO: Need to figure this value out -  need for timing + when to update display???
+        // After a ppu frame is 'done', update the display
+        if (ppu->frame_done) {
+            ppu->frame_done = false;
+            printf("display updated at cpu cycle %d\n", cpu->cycle_count);
             // Update Display
-            SDL_UpdateTexture(texture, 0, ppu->framebuffer, NES_WIDTH * 4); // We multiply the width (256) by 4 to signify 4 bytes per pixel (uint32_t) for the pitch
+            SDL_UpdateTexture(texture, NULL, ppu->framebuffer, (NES_WIDTH * sizeof(uint32_t))); // We multiply the width (256) by sizeof(uint32_t) for the pitch because there are WIDTH * pixels for each row.
             // SDL_RenderClear(renderer);
-            SDL_RenderCopy(renderer, texture, 0, 0);
+            SDL_RenderCopy(renderer, texture, NULL, NULL);
             SDL_RenderPresent(renderer);
-
-            // Handle SDL events
-            for (SDL_Event event; SDL_PollEvent(&event);)
-                if (event.type == SDL_QUIT)
-                return 0;
         }
-
     }
 
 

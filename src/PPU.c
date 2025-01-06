@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <SDL2/SDL.h>
 
 
 static const uint32_t NES_PALETTE[64] = {
@@ -125,7 +126,6 @@ Ppu* init_ppu() {
 void ppu_connect_cart(Ppu* ppu, Cartridge* cart) {
     ppu->cart = cart;
 }
-
 
 void ppu_increment_scroll_x(Ppu* ppu) {
     if (ppu->registers.mask.bits.renderBackground || ppu->registers.mask.bits.renderSprites) {
@@ -277,7 +277,8 @@ void ppu_clock (Ppu* ppu) {
 
     // Update the framebuffer with the appropiate pixels + palettes
     if ((ppu->cycle-1) >= 0 && (ppu->cycle-1) < PPU_SCREEN_WIDTH && ppu->scanline >= 0 && ppu->scanline < PPU_SCREEN_HEIGHT) {
-        ppu->framebuffer[((ppu->cycle - 1) * PPU_SCREEN_HEIGHT) + ppu->scanline] = (get_palette_colour(ppu_read(ppu, 0x3F00 + (bgPalette << 2) + bgPixel)));
+        //ppu->framebuffer[((ppu->cycle - 1) * PPU_SCREEN_HEIGHT) + ppu->scanline] = (get_palette_colour(ppu_read(ppu, 0x3F00 + (bgPalette << 2) + bgPixel)));
+        ppu->framebuffer[ppu->scanline * PPU_SCREEN_WIDTH + (ppu->cycle - 1)] = (get_palette_colour(ppu_read(ppu, 0x3F00 + (bgPalette << 2) + bgPixel)));
     }
     
     // printf("Cycle: %d\n", ppu->cycle);

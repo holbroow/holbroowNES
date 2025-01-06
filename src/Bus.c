@@ -37,8 +37,8 @@ void bus_write(Bus* bus, uint16_t address, uint8_t data) {
         cpu_ppu_write(bus->ppu, address & 0x0007, data);
 
     } else if (address >= 0x4016 && address <= 0x4017) {
-        // Controllers (Not implemented)
-        printf("[BUS] Controller not implemented.\n");
+        // Controller(s)
+        bus->controller_state[address & 0x0001] = bus->controller[address & 0x0001];
 
     } else if (address >= 0x4020 && address <= 0x5FFF) {
         // Expansion ROM (Not implemented)
@@ -65,8 +65,9 @@ uint8_t bus_read(Bus* bus, uint16_t address) {
         return cpu_ppu_read(bus->ppu, address & 0x0007, false);
 
     } else if (address >= 0x4016 && address <= 0x4017) {
-        // Controllers (Not implemented)
-        printf("[BUS] Controller not implemented.\n");
+        // Controller(s)
+        data = (bus->controller_state[address & 0x0001] & 0x80) > 0;
+        bus->controller_state[address & 0x0001] <<= 1;
 
     } else if (address >= 0x4020 && address <= 0x5FFF) {
         // Expansion ROM (Not implemented)

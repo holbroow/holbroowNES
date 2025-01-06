@@ -21,9 +21,11 @@ BUS - 0x0000 - 0xFFFF
 
 // Define the Bus structure
 typedef struct Bus {
-    uint8_t main_memory[2048];  // System RAM
+    uint8_t main_memory[2048];            // System RAM ('CPU memory')
     Ppu* ppu;                             // Reference to PPU
     Cartridge* cart;                      // Reference to Cartridge
+    uint8_t controller[2];
+    uint8_t controller_state[2];
 } Bus;
 
 // Function to initialize the bus

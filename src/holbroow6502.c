@@ -976,8 +976,8 @@ void handle_TXA(Cpu* cpu, uint8_t opcode) {
 
     cpu->A = cpu->X;
 
-    set_zero_flag(cpu, cpu->A);
-    set_negative_flag(cpu, cpu->A);
+    set_zero_flag(cpu, cpu->A == 0x00);
+    set_negative_flag(cpu, cpu->A & 0x80);
 }
 
 void handle_TYA(Cpu* cpu, uint8_t opcode) {
@@ -1156,12 +1156,12 @@ void handle_SBC(Cpu* cpu, uint8_t opcode) {
     // Invert bottom 8 bits with bitwise XOR
     uint8_t value = fetch_operand(cpu, mode, &address);
     uint16_t inverted = ((uint16_t)value) ^ 0x00FF;
-    uint16_t temp;
+    
+    uint16_t temp = (uint16_t)cpu->A + inverted + (uint16_t)(cpu->STATUS & FLAG_CARRY);
 
-	temp = (uint16_t)cpu->A + inverted + (uint16_t)(cpu->STATUS & FLAG_CARRY);
 	set_carry_flag(cpu, temp & 0xFF00);
 	set_zero_flag(cpu, ((temp & 0x00FF) == 0));
-	set_overflow_flag(cpu, (temp ^ (uint16_t)cpu->A) & (temp ^ value) & 0x0080);
+	set_overflow_flag(cpu, (temp ^ (uint16_t)cpu->A) & (temp ^ inverted) & 0x0080);
 	set_negative_flag(cpu, temp & 0x0080);
 	cpu->A = temp & 0x00FF;
 
