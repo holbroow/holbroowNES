@@ -519,7 +519,7 @@ void cpu_clock(Cpu* cpu, bool run_debug, int frame_num) {
         // printf("PC: %d\n", cpu->PC);
         //for (volatile int i = 0; i < 50000000; i++);
         
-        printf("PC: %02X |  %s  |  A:%02x |  X:%02x |  Y:%02x |  SP:%04x | %d\n", cpu->PC-1, InstructionStrings[current_opcode.instruction], cpu->A, cpu->X, cpu->Y, cpu->SP, cpu->cycle_count);
+        //printf("PC: %02X |  %s  |  A:%02x |  X:%02x |  Y:%02x |  SP:%04x | %d\n", cpu->PC-1, InstructionStrings[current_opcode.instruction], cpu->A, cpu->X, cpu->Y, cpu->SP, cpu->cycle_count);
 
         // NOTE: cpu->cycles_left is decremented within the instruction handlers, happy days!
         switch (current_opcode.instruction) {

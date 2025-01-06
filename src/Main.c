@@ -81,14 +81,17 @@ void init_nes() {
     printf("[MANAGER] Initialising BUS...\n");
     bus = init_bus();
     printf("[MANAGER] Initialising BUS finished!\n");
+    printf("[MANAGER] Assigning Game Cartridge reference to the BUS...\n");
+    bus->cart = cart;
+    printf("[MANAGER] Assigned Game Cartridge reference to the BUS!\n");
 
     // Initialize PPU
     printf("[MANAGER] Initialising PPU...\n");
     ppu = init_ppu();
     printf("[MANAGER] Assigning PPU reference to the BUS...\n");
     bus->ppu = ppu;
-    printf("[MANAGER] Assigning Game Cartridge reference to the BUS...\n");
-    bus->cart = cart;
+    printf("[MANAGER] Assigning Game Cartridge reference to the PPU...\n");
+    ppu->cart = cart;
     printf("[MANAGER] Initialising PPU finished!\n");
 
     // Initialize CPU
@@ -171,8 +174,6 @@ int main(int argc, char* argv[]) {
     printf("\n");
     printf("[CPU] Current CPU State:\n");
     print_cpu(cpu);
-    
-    uint16_t lastPC = cpu->PC;
 
     // Run the NES!
     while (cpu->running) {
@@ -184,7 +185,7 @@ int main(int argc, char* argv[]) {
         // After a number of cycles (maybe cycles??? not sure...) update the display
         if (cpu->cycle_count % 29780 == 0) { // TODO: Need to figure this value out -  need for timing + when to update display???
             // Update Display
-            SDL_UpdateTexture(texture, 0, ppu->framebuffer, NES_WIDTH * sizeof(uint32_t));
+            SDL_UpdateTexture(texture, 0, ppu->framebuffer, NES_WIDTH * 4); // We multiply the width (256) by 4 to signify 4 bytes per pixel (uint32_t) for the pitch
             // SDL_RenderClear(renderer);
             SDL_RenderCopy(renderer, texture, 0, 0);
             SDL_RenderPresent(renderer);

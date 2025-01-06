@@ -34,7 +34,7 @@ void bus_write(Bus* bus, uint16_t address, uint8_t data) {
 
     } else if (address >= 0x2000 && address <= 0x3FFF) {
         // PPU Registers (Mirrored every 8 bytes)
-        ppu_write(bus->ppu, address & 0x2007, data);
+        cpu_ppu_write(bus->ppu, address & 0x0007, data);
 
     } else if (address >= 0x4016 && address <= 0x4017) {
         // Controllers (Not implemented)
@@ -62,7 +62,7 @@ uint8_t bus_read(Bus* bus, uint16_t address) {
 
     } else if (address >= 0x2000 && address <= 0x3FFF) {
         // PPU Registers (Mirrored every 8 bytes)
-        return ppu_read(bus->ppu, address & 0x2007);
+        return cpu_ppu_read(bus->ppu, address & 0x0007, false);
 
     } else if (address >= 0x4016 && address <= 0x4017) {
         // Controllers (Not implemented)
