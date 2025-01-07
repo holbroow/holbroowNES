@@ -34,7 +34,7 @@ const Opcode opcode_table[256] = {
     [0xA2] = {LDX, IMM, 2, 2},
     [0xA6] = {LDX, ZP0, 2, 3},
     [0xAE] = {LDX, ABS, 3, 4},
-    [0xB6] = {LDX, ZPX, 2, 4},
+    [0xB6] = {LDX, ZPY, 2, 4},
     [0xBE] = {LDX, ABY, 3, 4},
 
     [0xA0] = {LDY, IMM, 2, 2},
@@ -299,21 +299,34 @@ uint8_t fetch_operand(Cpu* cpu, AddressingMode mode, uint16_t* address) {
             value = bus_read(cpu->bus, cpu->PC++);
             break;
         case ZP0: // checked
-            *address = (bus_read(cpu->bus, cpu->PC++) & 0xFF);
+            *address = (bus_read(cpu->bus, cpu->PC++) & 0x00FF);
             value = bus_read(cpu->bus, *address);
             break;
         case ZPX: // checked
-            *address = (bus_read(cpu->bus, cpu->PC++) + cpu->X) & 0xFF;
+            *address = (bus_read(cpu->bus, cpu->PC++) + cpu->X) & 0x00FF;
             value = bus_read(cpu->bus, *address);
             break;
         case ZPY: // checked
-            *address = (bus_read(cpu->bus, cpu->PC++) + cpu->Y) & 0xFF;
+            *address = (bus_read(cpu->bus, cpu->PC++) + cpu->Y) & 0x00FF;
             value = bus_read(cpu->bus, *address);
             break;
         case ABS: // checked
             *address = bus_read(cpu->bus, cpu->PC++) | (bus_read(cpu->bus, cpu->PC++) << 8);
             value = bus_read(cpu->bus, *address);
             break;
+        // case ABX:
+        //     *address = (bus_read(cpu->bus, cpu->PC++) | (bus_read(cpu->bus, cpu->PC++) << 8));
+        //     *address += cpu->X;
+        //     *address &= 0xFFFF;  // Ensure address wraps at 16-bit boundary
+        //     value = bus_read(cpu->bus, *address);
+        //     break;
+
+        // case ABY:
+        //     *address = (bus_read(cpu->bus, cpu->PC++) | (bus_read(cpu->bus, cpu->PC++) << 8) + cpu->Y);
+        //     *address += cpu->Y;
+        //     *address &= 0xFFFF;  // Ensure address wraps at 16-bit boundary
+        //     value = bus_read(cpu->bus, *address);
+        //     break;
         case ABX: // checked
             *address = (bus_read(cpu->bus, cpu->PC++) | (bus_read(cpu->bus, cpu->PC++) << 8)) + cpu->X;
             value = bus_read(cpu->bus, *address);
@@ -327,7 +340,8 @@ uint8_t fetch_operand(Cpu* cpu, AddressingMode mode, uint16_t* address) {
                 uint16_t t = bus_read(cpu->bus, cpu->PC++);
                 uint16_t lo = bus_read(cpu->bus, (uint16_t)(t + (uint16_t)cpu->X) & 0x00FF);
                 uint16_t hi = bus_read(cpu->bus, (uint16_t)(t + (uint16_t)cpu->X + 1) & 0x00FF);
-                value = (hi << 8) | lo;
+                *address = (hi << 8) | lo;
+                value = bus_read(cpu->bus, *address);
                 break;
             }
         case IZY: // checked
@@ -335,7 +349,8 @@ uint8_t fetch_operand(Cpu* cpu, AddressingMode mode, uint16_t* address) {
                 uint16_t t = bus_read(cpu->bus, cpu->PC++);
                 uint16_t lo = bus_read(cpu->bus, t & 0x00FF);
                 uint16_t hi = bus_read(cpu->bus, (t + 1) & 0x00FF);
-                value = ((hi << 8) | lo) + cpu->Y;
+                *address = ((hi << 8) | lo) + cpu->Y;
+                value = bus_read(cpu->bus, *address);
                 break;
             }
         case REL: // checked
@@ -519,6 +534,7 @@ void cpu_clock(Cpu* cpu, bool run_debug, int frame_num) {
         // printf("PC: %d\n", cpu->PC);
         //for (volatile int i = 0; i < 50000000; i++);
         
+        // Debug statement to test with nestest.nes 'golden log' before we had PPU bgs and therefore GUI
         //printf("PC: %02X |  %s  |  A:%02x |  X:%02x |  Y:%02x |  SP:%04x | %d\n", cpu->PC-1, InstructionStrings[current_opcode.instruction], cpu->A, cpu->X, cpu->Y, cpu->SP, cpu->cycle_count);
 
         // NOTE: cpu->cycles_left is decremented within the instruction handlers, happy days!
@@ -1152,26 +1168,35 @@ void handle_SBC(Cpu* cpu, uint8_t opcode) {
 
     AddressingMode mode = opcode_table[opcode].addressing_mode;
     uint16_t address = 0;
+    uint8_t value = fetch_operand(cpu, mode, &address) ^ 0x00FF;
+    uint16_t temp;
     
-    // Invert bottom 8 bits with bitwise XOR
-    uint8_t value = fetch_operand(cpu, mode, &address);
-    uint16_t inverted = ((uint16_t)value) ^ 0x00FF;
-    
-    uint16_t temp = (uint16_t)cpu->A + inverted + (uint16_t)(cpu->STATUS & FLAG_CARRY);
-
-	set_carry_flag(cpu, temp & 0xFF00);
-	set_zero_flag(cpu, ((temp & 0x00FF) == 0));
-	set_overflow_flag(cpu, (temp ^ (uint16_t)cpu->A) & (temp ^ inverted) & 0x0080);
-	set_negative_flag(cpu, temp & 0x0080);
+    // Add is performed in 16-bit domain for emulation to capture any
+	// carry bit, which will exist in bit 8 of the 16-bit word
+	temp = (uint16_t)cpu->A + (uint16_t)value + (uint16_t)(cpu->STATUS & FLAG_CARRY);
+	
+	// The carry flag out exists in the high byte bit 0
+	set_carry_flag(cpu, temp > 255);
+	
+	// The Zero flag is set if the result is 0
+	set_zero_flag(cpu, (temp & 0x00FF) == 0);
+	
+	// The signed Overflow flag is set based on all that up there! :D
+	set_overflow_flag(cpu, (~((uint16_t)cpu->A ^ (uint16_t)value) & ((uint16_t)cpu->A ^ (uint16_t)temp)) & 0x0080);
+	
+	// The negative flag is set to the most significant bit of the result
+	set_negative_flag(cpu, temp & 0x80);
+	
+	// Load the result into the accumulator (it's 8-bit dont forget!)
 	cpu->A = temp & 0x00FF;
 
     // Check page crossing
     if (mode == ABX) {
         uint16_t base = address - cpu->X;
-        if (page_crossed(base, address)) cpu->cycles_left -= 1;
+        if (page_crossed(base, address)) cpu->cycles_left += 1;
     } else if (mode == ABY) {
         uint16_t base = address - cpu->Y;
-        if (page_crossed(base, address)) cpu->cycles_left -= 1;
+        if (page_crossed(base, address)) cpu->cycles_left += 1;
     }
 }
 
@@ -1191,10 +1216,10 @@ void handle_CMP(Cpu* cpu, uint8_t opcode) {
     // Check page crossing
     if (mode == ABX) {
         uint16_t base = address - cpu->X;
-        if (page_crossed(base, address)) cpu->cycles_left -= 1;
+        if (page_crossed(base, address)) cpu->cycles_left += 1;
     } else if (mode == ABY) {
         uint16_t base = address - cpu->Y;
-        if (page_crossed(base, address)) cpu->cycles_left -= 1;
+        if (page_crossed(base, address)) cpu->cycles_left += 1;
     }
 }
 
@@ -1240,7 +1265,7 @@ void handle_INC(Cpu* cpu, uint8_t opcode) {
     // Check page crossing
     if (mode == ABX) {
         uint16_t base = address - cpu->X;
-        if (page_crossed(base, address)) cpu->cycles_left -= 1;
+        if (page_crossed(base, address)) cpu->cycles_left += 1;
     }
 }
 
@@ -1276,7 +1301,7 @@ void handle_DEC(Cpu* cpu, uint8_t opcode) {
     // Check page crossing
     if (mode == ABX) {
         uint16_t base = address - cpu->X;
-        if (page_crossed(base, address)) cpu->cycles_left -= 1;
+        if (page_crossed(base, address)) cpu->cycles_left += 1;
     }
 }
 
@@ -1314,8 +1339,8 @@ void handle_ASL(Cpu* cpu, uint8_t opcode) {
     set_carry_flag(cpu, (value & 0x80) != 0);
 
     value <<= 1;
-    set_zero_flag(cpu, value);
-    set_negative_flag(cpu, value);
+    set_zero_flag(cpu, value == 0x00);
+    set_negative_flag(cpu, value & 0x80);
 
     if (is_accumulator) {
         cpu->A = value;
@@ -1355,6 +1380,7 @@ void handle_LSR(Cpu* cpu, uint8_t opcode) {
 
 void handle_ROL(Cpu* cpu, uint8_t opcode) {
     cpu->cycles_left += opcode_table[opcode].cycles;
+
     uint16_t address = 0;
     uint8_t value;
     bool is_accumulator = false;
@@ -1371,8 +1397,8 @@ void handle_ROL(Cpu* cpu, uint8_t opcode) {
     set_carry_flag(cpu, (value & 0x80) != 0);
 
     value = (value << 1) | carry_in;
-    set_zero_flag(cpu, value);
-    set_negative_flag(cpu, value);
+    set_zero_flag(cpu, value == 0x00);
+    set_negative_flag(cpu, value & 0x80);
 
     if (is_accumulator) {
         cpu->A = value;
@@ -1380,6 +1406,29 @@ void handle_ROL(Cpu* cpu, uint8_t opcode) {
         bus_write(cpu->bus, address, value);
     }
 }
+
+// void handle_ROL(Cpu* cpu, uint8_t opcode) {      // why does my proposed + fixed function not work properly still :0/
+//                                                  // something else?  TODO: Come back to this...
+//     cpu->cycles_left += opcode_table[opcode].cycles;
+    
+//     uint16_t address = 0;
+//     uint8_t value;
+//     AddressingMode mode = opcode_table[opcode].addressing_mode;
+//     value = fetch_operand(cpu, mode, &address);
+
+// 	uint8_t temp = (uint16_t)(value << FLAG_CARRY) | cpu->STATUS & FLAG_CARRY;
+
+//     set_carry_flag(cpu, temp & 0xFF00);
+//     set_zero_flag(cpu, (temp & 0x00FF) == 0x0000);
+//     set_negative_flag(cpu, temp & 0x0080);
+
+//     // This op has different Address mode
+// 	if (mode == IMP) {
+// 		cpu->A = temp & 0x00FF;
+//     } else {
+//         bus_write(cpu->bus, address, temp & 0x00FF);
+//     }
+// }
 
 void handle_ROR(Cpu* cpu, uint8_t opcode) {
     cpu->cycles_left += opcode_table[opcode].cycles;
@@ -1400,8 +1449,8 @@ void handle_ROR(Cpu* cpu, uint8_t opcode) {
     set_carry_flag(cpu, (value & 0x01) != 0);
 
     value = (value >> 1) | carry_in;
-    set_zero_flag(cpu, value);
-    set_negative_flag(cpu, value);
+    set_zero_flag(cpu, value == 0x00);
+    set_negative_flag(cpu, value & 0x80);
 
     if (is_accumulator) {
         cpu->A = value;

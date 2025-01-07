@@ -83,6 +83,13 @@ typedef union LoopyRegister {
     uint16_t reg;
 } LoopyRegister;
 
+typedef struct sObjectAttributeEntry {
+    uint8_t y;			// Y position of sprite
+    uint8_t id;			// ID of tile from pattern memory
+    uint8_t attribute;	// Flags define how sprite should be rendered
+    uint8_t x;			// X position of sprite
+} sObjectAttributeEntry;
+
 // PPU structure
 typedef struct Ppu {
     Cartridge* cart;
@@ -90,11 +97,16 @@ typedef struct Ppu {
     uint32_t framebuffer[PPU_SCREEN_WIDTH * PPU_SCREEN_HEIGHT];
 
     uint8_t name_table[2][1024];
-    uint8_t palette_table[64];
     uint8_t patternTable[2][4096];   // This table wont be used in the real emulation. Just keep it here for the moment for the design.
+    uint8_t palette_table[64];
+
+    Sprite* sprScreen;
+	Sprite* sprNameTable[2];
+	Sprite* sprPatternTable[2];
 
     int scanline;
     int cycle;
+    int frames_completed;
 
     PpuRegisters registers;
     LoopyRegister vramAddr;
@@ -112,10 +124,22 @@ typedef struct Ppu {
     uint16_t bgShifterAttribLo;
     uint16_t bgShifterAttribHi;
 
+    sObjectAttributeEntry OAM[64];
+    uint8_t oam_addr;
+
+    sObjectAttributeEntry spriteScanline[8];
+	uint8_t sprite_count;
+	uint8_t sprite_shifter_pattern_lo[8];
+	uint8_t sprite_shifter_pattern_hi[8];
+
+    bool bSpriteZeroHitPossible;
+	bool bSpriteZeroBeingRendered;
+
+    uint8_t* pOAM;
+
     bool frame_done;
     bool nmi_occurred;
 } Ppu;
-
 
 
 // Init PPU (+ cartridge with said PPU)
@@ -133,4 +157,4 @@ void cpu_ppu_write(Ppu* ppu, uint16_t address, uint8_t data);
 uint8_t ppu_read(Ppu* ppu, uint16_t address);
 void ppu_write(Ppu* ppu, uint16_t address, uint8_t data);
 
-
+Sprite *GetPatternTable(uint8_t i, uint8_t palette);

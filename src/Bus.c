@@ -20,6 +20,12 @@ Bus* init_bus() {
     bus->ppu = NULL;
     bus->cart = NULL;
 
+    bus->dma_page = 0x00;
+	bus->dma_addr = 0x00;
+    bus->dma_data = 0x00;
+    bus->dma_dummy = true;
+	bus->dma_transfer = true;
+
     return bus;
 }
 
@@ -36,6 +42,11 @@ void bus_write(Bus* bus, uint16_t address, uint8_t data) {
         // PPU Registers (Mirrored every 8 bytes)
         cpu_ppu_write(bus->ppu, address & 0x0007, data);
 
+    } else if (address == 0x4014) {
+        bus->dma_page = data;
+		bus->dma_addr = 0x00;
+		bus->dma_transfer = true;
+
     } else if (address >= 0x4016 && address <= 0x4017) {
         // Controller(s)
         bus->controller_state[address & 0x0001] = bus->controller[address & 0x0001];
@@ -45,7 +56,7 @@ void bus_write(Bus* bus, uint16_t address, uint8_t data) {
         printf("[BUS] Expansion ROM not implemented.\n");
 
     } else {
-        printf("[BUS] Detected write to undefined address on bus: 0x%04X\n", address);
+        //printf("[BUS] Detected write to undefined address on bus: 0x%04X\n", address);
     }
 }
 

@@ -1,6 +1,5 @@
 // Will Holbrook | Lancaster University Third Year Project 2024 (SCC 300: EmuPC)
-// Main.c (Loads a (currently hard coded) program into memory and calls the 6502 CPU to 
-// run from that address, hence running the stored program.)
+// Main.c (TODO: Expl here!)
 
 #define SDL_MAIN_HANDLED
 
@@ -18,9 +17,9 @@
 #include <SDL2/SDL.h>
 
 // Define display parameters
-#define NES_WIDTH 256
-#define NES_HEIGHT 240
-#define SCALE 2  // Scale factor for visibility
+#define NES_WIDTH 256   // Pixel 'Width' of NES res
+#define NES_HEIGHT 240  // Pixel 'Height' of NES res
+#define SCALE 3         // Scale factor for improved visibility
 
 const char* file_path;
 Cartridge* cart;
@@ -34,43 +33,6 @@ bool cpu_running;
 bool run_debug = false;
 int frame_num = 0;
 
-
-// Helper function to get current time in nanoseconds
-uint64_t get_time_ns() {
-    // ASSUMING WINDOWS (NTS: WOULD LIKE TO ADD COMPILER SUPPORT FOR LINUX LATER)
-    LARGE_INTEGER frequency;
-    LARGE_INTEGER counter;
-    if (!QueryPerformanceFrequency(&frequency)) {
-        fprintf(stderr, "[CPU] Time, QueryPerformanceFrequency failed!\n");
-        return 0;
-    }
-    if (!QueryPerformanceCounter(&counter)) {
-        fprintf(stderr, "[CPU] Time, QueryPerformanceCounter failed!\n");
-        return 0;
-    }
-    return (uint64_t)((counter.QuadPart * 1000000000LL) / frequency.QuadPart);
-}
-
-// Cross-platform sleep function in microseconds
-void sleep_microseconds(uint64_t microseconds) {
-    // AGAIN, ASSUMING WINDOWS (NTS: WOULD LIKE TO ADD COMPILER SUPPORT FOR LINUX LATER)
-    if (microseconds >= 1000) {
-        // Sleep for the integer part of milliseconds
-        DWORD millis = (DWORD)(microseconds / 1000);
-        Sleep(millis);
-    }
-
-    // Busy-wait for the remaining microseconds
-    LARGE_INTEGER frequency;
-    LARGE_INTEGER start, current;
-    QueryPerformanceFrequency(&frequency);
-    QueryPerformanceCounter(&start);
-    double wait_time = (double)(microseconds % 1000) / 1000000.0; // Convert to seconds
-
-    do {
-        QueryPerformanceCounter(&current);
-    } while (((double)(current.QuadPart - start.QuadPart) / frequency.QuadPart) < wait_time);
-}
 
 // Initialise the NES as aa system (peripherals)
 void init_nes() {
@@ -127,7 +89,37 @@ void nes_clock() {
 
         // Run 1 cpu 'clock' for every 3 PPU cycles
         if (nes_cycles_passed % 3 == 0) {
-            cpu_clock(cpu, run_debug, frame_num);
+            if (bus->dma_transfer) {
+                if (bus->dma_dummy) {
+                    if (nes_cycles_passed % 2 == 0) {
+                        bus->dma_dummy = false;
+                    }
+                } else {
+                    // DMA can take place!
+                    if (nes_cycles_passed % 2 == 0)
+                    {
+                        // On even clock cycles, read from CPU bus
+                        bus->dma_data = bus_read(bus, bus->dma_page << 8 | bus->dma_addr);
+                    }
+                    else
+                    {
+                        // On odd clock cycles, write to PPU OAM
+                        bus->ppu->pOAM[bus->dma_addr] = bus->dma_data;
+                        // Increment the lo byte of the address
+                        bus->dma_addr++;
+                        // If this wraps around, we know that 256
+                        // bytes have been written, so end the DMA
+                        // transfer, and proceed as normal
+                        if (bus->dma_addr == 0x00)
+                        {
+                            bus->dma_transfer = false;
+                            bus->dma_dummy = true;
+                        }
+                    }
+                }
+            } else {
+                cpu_clock(cpu, run_debug, frame_num);
+            }
         }
 
         if (bus->ppu->nmi_occurred) {
@@ -147,10 +139,8 @@ int main(int argc, char* argv[]) {
     }
     file_path = argv[1];
 
-
     // Initialise the 'NES' with a Cartridge, Bus, PPU, and CPU
     init_nes();
-
 
     // Debug to check if cart->prg_rom (and therefore redundantly ppu->cart->prg_rom) is of substance
     printf("\n[MANAGER] Program on cartridge:\n");
@@ -164,28 +154,21 @@ int main(int argc, char* argv[]) {
     }
     printf("\n");
 
-
     // Initialise Display
     init_display();
 
-
     // Run the NES!!!
     cpu->running = true;
-    printf("[CPU] CPU is now running!\n");
-    printf("\n");
-    printf("[CPU] Current CPU State:\n");
-    print_cpu(cpu);
+    // printf("[CPU] CPU is now running!\n");
+    // printf("\n");
+    // printf("[CPU] Current CPU State:\n");
+    // print_cpu(cpu);
 
+    const uint32_t frame_duration_ms = 16;          // Store our target of ~60 FPS (16ms per frame)
+    uint32_t frame_start_time_ms = SDL_GetTicks();  // Store the start time for initial frame
 
     // Run the NES!
     while (cpu->running) {
-        // Handle SDL events
-        for (SDL_Event event; SDL_PollEvent(&event);) {
-            if (event.type == SDL_QUIT) {
-                return 0;
-            }
-        }
-        
         // Handle any key presses (controller activity)
         const Uint8 *state = SDL_GetKeyboardState(NULL);
         bus->controller[0] = 0x00;
@@ -198,29 +181,53 @@ int main(int argc, char* argv[]) {
         if (state[SDL_SCANCODE_LEFT])       bus->controller[0] |= 0x02;    // Left     (Key LEFT ARR)
         if (state[SDL_SCANCODE_RIGHT])      bus->controller[0] |= 0x01;    // Right    (Key RIGHT ARR)
 
-
         // Do 1 NES 'clock'
         nes_clock();
 
-
-        // After a ppu frame is 'done', update the display
+        // If the PPU completes the frame rendering process...
         if (ppu->frame_done) {
+            // Reset flag
             ppu->frame_done = false;
-            printf("display updated at cpu cycle %d\n", cpu->cycle_count);
-            // Update Display
-            SDL_UpdateTexture(texture, NULL, ppu->framebuffer, (NES_WIDTH * sizeof(uint32_t))); // We multiply the width (256) by sizeof(uint32_t) for the pitch because there are WIDTH * pixels for each row.
-            // SDL_RenderClear(renderer);
+
+            // Render frame to the SDL window/'display'
+            SDL_UpdateTexture(texture, NULL, ppu->framebuffer, NES_WIDTH * sizeof(uint32_t));
             SDL_RenderCopy(renderer, texture, NULL, NULL);
             SDL_RenderPresent(renderer);
+            // Increment the count (debug purposes only, otherwise serves no functional purpose)
+            frame_num++;
+
+            // Handle any SDL events
+            for (SDL_Event event; SDL_PollEvent(&event);) {
+                if (event.type == SDL_QUIT) {
+                    return 0;
+                }
+            }
+
+            // Attempt to time the frame to achieve ~60fps
+            uint32_t frame_end_time_ms = SDL_GetTicks();
+            int delay_time = frame_duration_ms - (frame_end_time_ms - frame_start_time_ms);
+            if (delay_time > 0) {
+                SDL_Delay(delay_time);
+            }
+
+            // Debug to check frequency of 60 frame update events
+            if (frame_num % 60 == 0) {
+                printf("60 frames passed/updated!\n");
+            }
+
+            // Update the start time for the next frame
+            frame_start_time_ms = SDL_GetTicks(); // Reset frame timer
         }
+
     }
 
 
-    // Clean up
+    // Clean up - Free NES components from memory
     free(cpu);
     free(ppu);
     free(bus);
     free(cart);
 
+    // Bye bye!
     return 0;
 }

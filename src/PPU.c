@@ -95,6 +95,7 @@ Ppu* init_ppu() {
 
     ppu->scanline = 0;
     ppu->cycle = 0;
+    ppu->frames_completed = 0;
 
     ppu->registers.ctrl = (PpuCtrl){0};
     ppu->registers.status = (PpuStatus){0};
@@ -117,6 +118,13 @@ Ppu* init_ppu() {
     ppu->bgShifterAttribLo = 0x0000;
     ppu->bgShifterAttribHi = 0x0000;
 
+    ppu->oam_addr = 0x00;
+
+    ppu->bSpriteZeroHitPossible = false;
+    ppu->bSpriteZeroBeingRendered = false;
+
+    ppu->pOAM = (uint8_t*)ppu->OAM;
+
     ppu->frame_done = false;
     ppu->nmi_occurred = false;
 
@@ -125,6 +133,40 @@ Ppu* init_ppu() {
 
 void ppu_connect_cart(Ppu* ppu, Cartridge* cart) {
     ppu->cart = cart;
+}
+
+Sprite* get_pattern_table(Ppu* ppu, uint8_t i, uint8_t palette) {
+    for (uint16_t nTileY = 0; nTileY < 16; nTileY++) {
+        for (uint16_t nTileX = 0; nTileX < 16; nTileX++) {
+            uint16_t nOffset = nTileY * 256 + nTileX * 16;
+            // Now loop through 8 rows of 8 pixels (Tile)
+            for (uint16_t row = 0; row < 8; row++) {
+                uint8_t tile_lsb = ppu_read(ppu, i * 0x1000 + nOffset + row + 0x0000);
+                uint8_t tile_msb = ppu_read(ppu, i * 0x1000 + nOffset + row + 0x0008);
+                for (uint16_t col = 0; col < 8; col++) {
+                    uint8_t pixel = ((tile_lsb & 0x01) << 0) | ((tile_msb & 0x01) << 1);
+                    tile_lsb >>= 1; tile_msb >>= 1;
+
+                    uint32_t c = (get_palette_colour(ppu_read(ppu, 0x3F00 + (palette << 2) + pixel)));
+                    
+                    ppu->sprPatternTable[i]->pixels[(nTileX * 8 + (7 - col)) * ppu->sprPatternTable[i]->height + (nTileY * 8 + row)] = c;
+                }
+            }
+        }
+    }
+    return ppu->sprPatternTable[i];
+}
+
+Sprite* get_name_table(Ppu* ppu, uint8_t i) {
+    return ppu->sprNameTable[i];
+}
+
+static inline uint8_t flipbyte(uint8_t b)
+{
+    b = ((b & 0xF0) >> 4) | ((b & 0x0F) << 4);
+    b = ((b & 0xCC) >> 2) | ((b & 0x33) << 2);
+    b = ((b & 0xAA) >> 1) | ((b & 0x55) << 1);
+    return b;
 }
 
 void ppu_increment_scroll_x(Ppu* ppu) {
@@ -189,15 +231,33 @@ void ppu_update_shifters(Ppu* ppu) {
         ppu->bgShifterAttribLo <<= 1;
         ppu->bgShifterAttribHi <<= 1;
     }
+
+    if (ppu->registers.mask.bits.renderSprites && ppu->cycle >= 1 && ppu->cycle < 258) {
+        for (size_t i = 0; i < ppu->sprite_count; i++)
+        {
+            if (ppu->spriteScanline[i].x > 0) {
+				ppu->spriteScanline[i].x--;
+			} else {
+				ppu->sprite_shifter_pattern_lo[i] <<= 1;
+				ppu->sprite_shifter_pattern_hi[i] <<= 1;
+			}
+        }
+    }
 }
 
 void ppu_clock (Ppu* ppu) {
     if (ppu->scanline >= -1 && ppu->scanline < 240) {
-        if (ppu->scanline == 0 && ppu->cycle == 0) {
+        if (ppu->scanline == 0 && ppu->cycle == 0 && (ppu->frames_completed % 2 != 0) && (ppu->registers.mask.bits.renderBackground || ppu->registers.mask.bits.renderSprites)) {
             ppu->cycle = 1;
         }
         if (ppu->scanline == -1 && ppu->cycle == 1) {
             ppu->registers.status.bits.verticalBlank = 0;
+            ppu->registers.status.bits.spriteOverflow = 0;
+            ppu->registers.status.bits.spriteZeroHit = 0;
+            for (size_t i = 0; i < 8; i++) {
+                ppu->sprite_shifter_pattern_lo[i] = 0;
+				ppu->sprite_shifter_pattern_hi[i] = 0;
+            }
         }
         if ((ppu->cycle >= 2 && ppu->cycle < 258) || (ppu->cycle >= 321 && ppu->cycle < 338)) {
             ppu_update_shifters(ppu);
@@ -248,8 +308,124 @@ void ppu_clock (Ppu* ppu) {
         }
     }
 
+    if (ppu->cycle == 257 && ppu->scanline >= 0) {
+        memset(ppu->spriteScanline, 0xFF, 8 * sizeof(sObjectAttributeEntry));
+        ppu->sprite_count = 0;
+
+        for (uint8_t i = 0; i < 8; i++) {
+            ppu->sprite_shifter_pattern_lo[i] = 0;
+            ppu->sprite_shifter_pattern_hi[i] = 0;
+        }
+        
+        uint8_t nOAMEntry = 0;
+        ppu->bSpriteZeroHitPossible = false;
+
+        while (nOAMEntry < 64 && ppu->sprite_count < 9)
+			{
+				int16_t diff = ((int16_t)ppu->scanline - (int16_t)ppu->OAM[nOAMEntry].y);
+				
+				if (diff >= 0 && diff < (ppu->registers.ctrl.bits.spriteSize ? 16 : 8) && ppu->sprite_count < 8)
+				{
+					if (ppu->sprite_count < 8)
+					{
+						// Is this sprite sprite zero?
+						if (nOAMEntry == 0)
+						{
+							// It is, so its possible it may trigger a 
+							// sprite zero hit when drawn
+							ppu->bSpriteZeroHitPossible = true;
+						}
+
+						memcpy(&ppu->spriteScanline[ppu->sprite_count], &ppu->OAM[nOAMEntry], sizeof(sObjectAttributeEntry));						
+					}			
+					ppu->sprite_count++;
+				}
+				nOAMEntry++;
+			} // End of sprite evaluation for next scanline
+
+			// Set sprite overflow flag
+			ppu->registers.status.bits.spriteOverflow = (ppu->sprite_count >= 8);
+    }
+
+    if (ppu->cycle == 340) {
+        for (uint8_t i = 0; i < ppu->sprite_count; i++) {
+            uint8_t sprite_pattern_bits_lo, sprite_pattern_bits_hi;
+            uint16_t sprite_pattern_addr_lo, sprite_pattern_addr_hi;
+
+            if (!ppu->registers.ctrl.bits.spriteSize) {
+                if (!(ppu->spriteScanline[i].attribute & 0x80)) {
+                    sprite_pattern_addr_lo = 
+                        (ppu->registers.ctrl.bits.patternSprite << 12  )  // Which Pattern Table? 0KB or 4KB offset
+                    | (ppu->spriteScanline[i].id   << 4   )  // Which Cell? Tile ID * 16 (16 bytes per tile)
+                    | (ppu->scanline - ppu->spriteScanline[i].y); // Which Row in cell? (0->7)
+                                            
+                } else {
+                    // Sprite is flipped vertically, i.e. upside down
+                    sprite_pattern_addr_lo = 
+                        (ppu->registers.ctrl.bits.patternSprite << 12  )  // Which Pattern Table? 0KB or 4KB offset
+                    | (ppu->spriteScanline[i].id   << 4   )  // Which Cell? Tile ID * 16 (16 bytes per tile)
+                    | (7 - (ppu->scanline - ppu->spriteScanline[i].y)); // Which Row in cell? (7->0)
+                }
+
+            } else {
+                // 8x16 Sprite Mode - The sprite attribute determines the pattern table
+                if (!(ppu->spriteScanline[i].attribute & 0x80)) {
+                    // Sprite is NOT flipped vertically, i.e. normal
+                    if (ppu->scanline - ppu->spriteScanline[i].y < 8) {
+                        // Reading Top half Tile
+                        sprite_pattern_addr_lo = 
+                            ((ppu->spriteScanline[i].id & 0x01)      << 12)  // Which Pattern Table? 0KB or 4KB offset
+                        | ((ppu->spriteScanline[i].id & 0xFE)      << 4 )  // Which Cell? Tile ID * 16 (16 bytes per tile)
+                        | ((ppu->scanline - ppu->spriteScanline[i].y) & 0x07 ); // Which Row in cell? (0->7)
+                    } else {
+                        // Reading Bottom Half Tile
+                        sprite_pattern_addr_lo = 
+                            ( (ppu->spriteScanline[i].id & 0x01)      << 12)  // Which Pattern Table? 0KB or 4KB offset
+                        | (((ppu->spriteScanline[i].id & 0xFE) + 1) << 4 )  // Which Cell? Tile ID * 16 (16 bytes per tile)
+                        | ((ppu->scanline - ppu->spriteScanline[i].y) & 0x07  ); // Which Row in cell? (0->7)
+                    }
+                } else {
+                    // Sprite is flipped vertically, i.e. upside down
+                    if (ppu->scanline - ppu->spriteScanline[i].y < 8) {
+                        // Reading Top half Tile
+                        sprite_pattern_addr_lo = 
+                            ( (ppu->spriteScanline[i].id & 0x01)      << 12)    // Which Pattern Table? 0KB or 4KB offset
+                        | (((ppu->spriteScanline[i].id & 0xFE) + 1) << 4 )    // Which Cell? Tile ID * 16 (16 bytes per tile)
+                        | (7 - (ppu->scanline - ppu->spriteScanline[i].y) & 0x07); // Which Row in cell? (0->7)
+                    } else {
+                        // Reading Bottom Half Tile
+                        sprite_pattern_addr_lo = 
+                            ((ppu->spriteScanline[i].id & 0x01)       << 12)    // Which Pattern Table? 0KB or 4KB offset
+                        | ((ppu->spriteScanline[i].id & 0xFE)       << 4 )    // Which Cell? Tile ID * 16 (16 bytes per tile)
+                        | (7 - (ppu->scanline - ppu->spriteScanline[i].y) & 0x07); // Which Row in cell? (0->7)
+                    }
+                }
+            }
+
+            // Hi bit plane equivalent is always offset by 8 bytes from lo bit plane
+            sprite_pattern_addr_hi = sprite_pattern_addr_lo + 8;
+
+            // Now we have the address of the sprite patterns, we can read them
+            sprite_pattern_bits_lo = ppu_read(ppu, sprite_pattern_addr_lo);
+            sprite_pattern_bits_hi = ppu_read(ppu, sprite_pattern_addr_hi);
+
+            // If the sprite is flipped horizontally, we need to flip the 
+            // pattern bytes. 
+            if (ppu->spriteScanline[i].attribute & 0x40) {
+                // Flip Patterns Horizontally
+                sprite_pattern_bits_lo = flipbyte(sprite_pattern_bits_lo);
+                sprite_pattern_bits_hi = flipbyte(sprite_pattern_bits_hi);
+            }
+
+            // Finally! We can load the pattern into our sprite shift registers
+            // ready for rendering on the next scanline
+            ppu->sprite_shifter_pattern_lo[i] = sprite_pattern_bits_lo;
+            ppu->sprite_shifter_pattern_hi[i] = sprite_pattern_bits_hi;
+        }
+    }
+
     if (ppu->scanline == 240) {
-        // Nothing happen here
+        // Nothing happens here
     }
 
     if (ppu->scanline >= 241 && ppu->scanline < 261) {
@@ -265,15 +441,148 @@ void ppu_clock (Ppu* ppu) {
     uint8_t bgPalette = 0x00;
 
     if (ppu->registers.mask.bits.renderBackground) {
-        uint16_t bitMux = 0x8000 >> ppu->fineX;
-        uint8_t p0Pixel = (ppu->bgShifterPatternLo & bitMux) > 0;
-        uint8_t p1Pixel = (ppu->bgShifterPatternHi & bitMux) > 0;
-        bgPixel = (p1Pixel << 1) | p0Pixel;
+        if (ppu->registers.mask.bits.renderBackgroundLeft || (ppu->cycle >= 9)) {
+            uint16_t bitMux = 0x8000 >> ppu->fineX;
+            uint8_t p0Pixel = (ppu->bgShifterPatternLo & bitMux) > 0;
+            uint8_t p1Pixel = (ppu->bgShifterPatternHi & bitMux) > 0;
+            bgPixel = (p1Pixel << 1) | p0Pixel;
 
-        uint8_t bgPalette0 = (ppu->bgShifterAttribLo & bitMux) > 0;
-        uint8_t bgPalette1 = (ppu->bgShifterAttribHi & bitMux) > 0;
-        bgPalette = (bgPalette1 << 1) | bgPalette0;
+            uint8_t bgPalette0 = (ppu->bgShifterAttribLo & bitMux) > 0;
+            uint8_t bgPalette1 = (ppu->bgShifterAttribHi & bitMux) > 0;
+            bgPalette = (bgPalette1 << 1) | bgPalette0;
+        }
     }
+
+
+    uint8_t fg_pixel = 0x00;
+	uint8_t fg_palette = 0x00; 
+	uint8_t fg_priority = 0x00;
+
+    if (ppu->registers.mask.bits.renderSprites)
+	{
+		// Iterate through all sprites for this scanline. This is to maintain
+		// sprite priority. As soon as we find a non transparent pixel of
+		// a sprite we can abort
+		if (ppu->registers.mask.bits.renderSpritesLeft || (ppu->cycle >= 9))
+		{
+
+			ppu->bSpriteZeroBeingRendered = false;
+
+			for (uint8_t i = 0; i < ppu->sprite_count; i++)
+			{
+				// Scanline cycle has "collided" with sprite, shifters taking over
+				if (ppu->spriteScanline[i].x == 0)
+				{
+					// Note Fine X scrolling does not apply to sprites, the game
+					// should maintain their relationship with the background. So
+					// we'll just use the MSB of the shifter
+
+					// Determine the pixel value...
+					uint8_t fg_pixel_lo = (ppu->sprite_shifter_pattern_lo[i] & 0x80) > 0;
+					uint8_t fg_pixel_hi = (ppu->sprite_shifter_pattern_hi[i] & 0x80) > 0;
+					fg_pixel = (fg_pixel_hi << 1) | fg_pixel_lo;
+
+					// Extract the palette from the bottom two bits. Recall
+					// that foreground palettes are the latter 4 in the 
+					// palette memory.
+					fg_palette = (ppu->spriteScanline[i].attribute & 0x03) + 0x04;
+					fg_priority = (ppu->spriteScanline[i].attribute & 0x20) == 0;
+
+					// If pixel is not transparent, we render it, and dont
+					// bother checking the rest because the earlier sprites
+					// in the list are higher priority
+					if (fg_pixel != 0)
+					{
+						if (i == 0) // Is this sprite zero?
+						{
+							ppu->bSpriteZeroBeingRendered = true;
+						}
+
+						break;
+					}
+				}
+			}
+		}		
+	}
+
+	// Now we have a background pixel and a foreground pixel. They need
+	// to be combined. It is possible for sprites to go behind background
+	// tiles that are not "transparent", yet another neat trick of the PPU
+	// that adds complexity for us poor emulator developers...
+
+	uint8_t pixel = 0x00;   // The FINAL Pixel...
+	uint8_t palette = 0x00; // The FINAL Palette...
+
+	if (bgPixel == 0 && fg_pixel == 0)
+	{
+		// The background pixel is transparent
+		// The foreground pixel is transparent
+		// No winner, draw "background" colour
+		pixel = 0x00;
+		palette = 0x00;
+	}
+	else if (bgPixel == 0 && fg_pixel > 0)
+	{
+		// The background pixel is transparent
+		// The foreground pixel is visible
+		// Foreground wins!
+		pixel = fg_pixel;
+		palette = fg_palette;
+	}
+	else if (bgPixel > 0 && fg_pixel == 0)
+	{
+		// The background pixel is visible
+		// The foreground pixel is transparent
+		// Background wins!
+		pixel = bgPixel;
+		palette = bgPalette;
+	}
+	else if (bgPixel > 0 && fg_pixel > 0)
+	{
+		// The background pixel is visible
+		// The foreground pixel is visible
+		// Hmmm...
+		if (fg_priority)
+		{
+			// Foreground cheats its way to victory!
+			pixel = fg_pixel;
+			palette = fg_palette;
+		}
+		else
+		{
+			// Background is considered more important!
+			pixel = bgPixel;
+			palette = bgPalette;
+		}
+
+		// Sprite Zero Hit detection
+		if (ppu->bSpriteZeroHitPossible && ppu->bSpriteZeroBeingRendered)
+		{
+			// Sprite zero is a collision between foreground and background
+			// so they must both be enabled
+			if (ppu->registers.mask.bits.renderBackground & ppu->registers.mask.bits.renderSprites)
+			{
+				// The left edge of the screen has specific switches to control
+				// its appearance. This is used to smooth inconsistencies when
+				// scrolling (since sprites x coord must be >= 0)
+				if (!(ppu->registers.mask.bits.renderBackgroundLeft |ppu->registers.mask.bits.renderSpritesLeft))
+				{
+					if (ppu->cycle >= 9 && ppu->cycle < 258)
+					{
+						ppu->registers.status.bits.spriteZeroHit = 1;
+					}
+				}
+				else
+				{
+					if (ppu->cycle >= 1 && ppu->cycle < 258)
+					{
+						ppu->registers.status.bits.spriteZeroHit = 1;
+					}
+				}
+			}
+		}
+	}
+
 
     // Update the framebuffer with the appropiate pixels + palettes
     if ((ppu->cycle-1) >= 0 && (ppu->cycle-1) < PPU_SCREEN_WIDTH && ppu->scanline >= 0 && ppu->scanline < PPU_SCREEN_HEIGHT) {
@@ -284,14 +593,24 @@ void ppu_clock (Ppu* ppu) {
     // printf("Cycle: %d\n", ppu->cycle);
     // printf("Scanline: %d\n", ppu->scanline);
 
-    // Advance renderer - it never stops, it's relentless
+    // Advance the 'renderer'
     ppu->cycle++;
+    if (ppu->registers.mask.bits.renderBackground || ppu->registers.mask.bits.renderSprites) {
+        if (ppu->cycle == 260 && ppu->scanline < 240)
+		{
+			// ppu->cart->GetMapper()->scanline();
+            // ppu->cart->
+
+            // TODO: NOT IMPLEMENTED YET, I SHOULD FOR MAPPER 4/5, i forget...
+		}
+    }
     if (ppu->cycle >= 341) {
         ppu->cycle = 0;
         ppu->scanline++;
         if (ppu->scanline >= 261) {
             ppu->scanline = -1;
             ppu->frame_done = true;
+            ppu->frames_completed++;
         }
     }
 }

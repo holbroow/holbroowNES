@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <stdbool.h>
 
 // Forward declaration to avoid circular dependencies
 typedef struct Ppu Ppu;
@@ -24,8 +25,15 @@ typedef struct Bus {
     uint8_t main_memory[2048];            // System RAM ('CPU memory')
     Ppu* ppu;                             // Reference to PPU
     Cartridge* cart;                      // Reference to Cartridge
+
     uint8_t controller[2];
     uint8_t controller_state[2];
+
+    uint8_t dma_page;
+	uint8_t dma_addr;
+	uint8_t dma_data;
+    bool dma_dummy;
+    bool dma_transfer;
 } Bus;
 
 // Function to initialize the bus
