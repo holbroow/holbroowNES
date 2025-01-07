@@ -149,7 +149,18 @@ Sprite* get_pattern_table(Ppu* ppu, uint8_t i, uint8_t palette) {
 
                     uint32_t c = (get_palette_colour(ppu_read(ppu, 0x3F00 + (palette << 2) + pixel)));
                     
-                    ppu->sprPatternTable[i]->pixels[(nTileX * 8 + (7 - col)) * ppu->sprPatternTable[i]->height + (nTileY * 8 + row)] = c;
+                    ppu->sprPatternTable[i]->pixels[
+                            (nTileX * 8 + (7 - col)) * 
+                            ppu->sprPatternTable[i]->height + 
+                            (nTileY * 8 + row)
+                        ] = c;
+
+                    // uint32_t x = nTileX * 8 + (7 - col);
+                    // uint32_t y = nTileY * 8 + row;
+
+                    // ppu->sprPatternTable[i]->pixels[
+                    //     y * ppu->sprPatternTable[i]->width + x
+                    // ] = c;
                 }
             }
         }
@@ -587,7 +598,11 @@ void ppu_clock (Ppu* ppu) {
     // Update the framebuffer with the appropiate pixels + palettes
     if ((ppu->cycle-1) >= 0 && (ppu->cycle-1) < PPU_SCREEN_WIDTH && ppu->scanline >= 0 && ppu->scanline < PPU_SCREEN_HEIGHT) {
         //ppu->framebuffer[((ppu->cycle - 1) * PPU_SCREEN_HEIGHT) + ppu->scanline] = (get_palette_colour(ppu_read(ppu, 0x3F00 + (bgPalette << 2) + bgPixel)));
-        ppu->framebuffer[ppu->scanline * PPU_SCREEN_WIDTH + (ppu->cycle - 1)] = (get_palette_colour(ppu_read(ppu, 0x3F00 + (bgPalette << 2) + bgPixel)));
+        // ppu->framebuffer[ppu->scanline * PPU_SCREEN_WIDTH + (ppu->cycle - 1)] = (get_palette_colour(ppu_read(ppu, 0x3F00 + (bgPalette << 2) + bgPixel)));
+        ppu->framebuffer[ppu->scanline * PPU_SCREEN_WIDTH + (ppu->cycle - 1)] =
+            get_palette_colour(
+                ppu_read(ppu, 0x3F00 + (palette << 2) + pixel)
+            );
     }
     
     // printf("Cycle: %d\n", ppu->cycle);

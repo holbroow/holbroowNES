@@ -211,10 +211,81 @@ const Opcode opcode_table[256] = {
     [0x00] = {BRK, IMP, 1, 7},
     [0xEA] = {NOP, IMP, 1, 2},
     [0x40] = {RTI, IMP, 1, 6},
+
+    // LAX (Load A and X simultaneously)
+    [0xA7] = { LAX, ZP0, 2, 3 },
+    [0xB7] = { LAX, ZPY, 2, 4 },
+    [0xAF] = { LAX, ABS, 3, 4 },
+    [0xBF] = { LAX, ABY, 3, 4 },  
+    [0xA3] = { LAX, IZX, 2, 6 },
+    [0xB3] = { LAX, IZY, 2, 5 },
+
+    // SAX (Store A & X)
+    [0x87] = { SAX, ZP0, 2, 3 },
+    [0x97] = { SAX, ZPY, 2, 4 },
+    [0x8F] = { SAX, ABS, 3, 4 },
+    [0x83] = { SAX, IZX, 2, 6 },
+
+    // DCP (DEC + CMP)
+    [0xC7] = { DCP, ZP0, 2, 5 },
+    [0xD7] = { DCP, ZPX, 2, 6 },
+    [0xCF] = { DCP, ABS, 3, 6 },
+    [0xDF] = { DCP, ABX, 3, 7 },
+    [0xDB] = { DCP, ABY, 3, 7 },
+    [0xC3] = { DCP, IZX, 2, 8 },
+    [0xD3] = { DCP, IZY, 2, 8 },
+
+    // ISB (INC + SBC)
+    [0xE7] = { ISB, ZP0, 2, 5 },
+    [0xF7] = { ISB, ZPX, 2, 6 },
+    [0xEF] = { ISB, ABS, 3, 6 },
+    [0xFF] = { ISB, ABX, 3, 7 },
+    [0xFB] = { ISB, ABY, 3, 7 },
+    [0xE3] = { ISB, IZX, 2, 8 },
+    [0xF3] = { ISB, IZY, 2, 8 },
+
+    // SLO (ASL + ORA)
+    [0x07] = { SLO, ZP0, 2, 5 },
+    [0x17] = { SLO, ZPX, 2, 6 },
+    [0x0F] = { SLO, ABS, 3, 6 },
+    [0x1F] = { SLO, ABX, 3, 7 },
+    [0x1B] = { SLO, ABY, 3, 7 },
+    [0x03] = { SLO, IZX, 2, 8 },
+    [0x13] = { SLO, IZY, 2, 8 },
+
+    // RLA (ROL + AND)
+    [0x27] = { RLA, ZP0, 2, 5 },
+    [0x37] = { RLA, ZPX, 2, 6 },
+    [0x2F] = { RLA, ABS, 3, 6 },
+    [0x3F] = { RLA, ABX, 3, 7 },
+    [0x3B] = { RLA, ABY, 3, 7 },
+    [0x23] = { RLA, IZX, 2, 8 },
+    [0x33] = { RLA, IZY, 2, 8 },
+
+    // SRE (LSR + EOR)
+    [0x47] = { SRE, ZP0, 2, 5 },
+    [0x57] = { SRE, ZPX, 2, 6 },
+    [0x4F] = { SRE, ABS, 3, 6 },
+    [0x5F] = { SRE, ABX, 3, 7 },
+    [0x5B] = { SRE, ABY, 3, 7 },
+    [0x43] = { SRE, IZX, 2, 8 },
+    [0x53] = { SRE, IZY, 2, 8 },
+
+    // RRA (ROR + ADC)
+    [0x67] = { RRA, ZP0, 2, 5 },
+    [0x77] = { RRA, ZPX, 2, 6 },
+    [0x6F] = { RRA, ABS, 3, 6 },
+    [0x7F] = { RRA, ABX, 3, 7 },
+    [0x7B] = { RRA, ABY, 3, 7 },
+    [0x63] = { RRA, IZX, 2, 8 },
+    [0x73] = { RRA, IZY, 2, 8 },
+
+    // SBC (0xEB) - alternate immediate SBC
+    [0xEB] = { SBC_EB, IMM, 2, 2 },
 };
 
 // Define mapped 'Instruction' string names
-const char *InstructionStrings[56] = {
+const char *InstructionStrings[65] = {
     "LDA",
     "LDX",
     "LDY",
@@ -270,7 +341,18 @@ const char *InstructionStrings[56] = {
     "SEI",
     "BRK",
     "NOP",
-    "RTI"
+    "RTI",
+
+    // Illegal opcodes, rarely but sometimes used for NES processing (like 5 games lol)
+    "LAX",
+    "SAX",
+    "DCP",
+    "ISB",
+    "SLO",
+    "RLA",
+    "SRE",
+    "RRA",
+    "SBC_EB"
 };
 
 // Define mapped 'Addressing Modes' string names
@@ -706,6 +788,33 @@ void cpu_clock(Cpu* cpu, bool run_debug, int frame_num) {
                 break;
             case RTI:
                 handle_RTI(cpu, opcode);
+                break;
+            case LAX:
+                handle_LAX(cpu, opcode);
+                break;
+            case SAX:
+                handle_SAX(cpu, opcode);
+                break;
+            case DCP:
+                handle_DCP(cpu, opcode);
+                break;
+            case ISB:
+                handle_ISB(cpu, opcode);
+                break;
+            case SLO:
+                handle_SLO(cpu, opcode);
+                break;
+            case RLA:
+                haandle_RLA(cpu, opcode);
+                break;
+            case SRE:
+                handle_SRE(cpu, opcode);
+                break;
+            case RRA:
+                handle_RRA(cpu, opcode);
+                break;
+            case SBC_EB:
+                handle_SBC_EB(cpu, opcode);
                 break;
             default:
                 // Handle illegal or undefined opcode(s)
@@ -1664,11 +1773,6 @@ void handle_BRK(Cpu* cpu, uint8_t opcode) {
     cpu->PC = (uint16_t)bus_read(cpu->bus, 0xFFFE) | ((uint16_t)bus_read(cpu->bus, 0xFFFF) << 8);
 }
 
-void handle_NOP(Cpu* cpu, uint8_t opcode) {
-    cpu->cycles_left += opcode_table[opcode].cycles;
-    // NOP does nothing else
-}
-
 void handle_RTI(Cpu* cpu, uint8_t opcode) {
     cpu->cycles_left += opcode_table[opcode].cycles;
 
@@ -1679,4 +1783,45 @@ void handle_RTI(Cpu* cpu, uint8_t opcode) {
     uint8_t low = pull_stack(cpu);
     uint8_t high = pull_stack(cpu);
     cpu->PC = (high << 8) | low;
+}
+
+void handle_NOP(Cpu* cpu, uint8_t opcode) {
+    cpu->cycles_left += opcode_table[opcode].cycles;
+    // NOP does nothing else
+}
+
+void handle_LAX(Cpu* cpu, uint8_t opcode) {
+
+}
+
+void handle_SAX(Cpu* cpu, uint8_t opcode) {
+    
+}
+
+void handle_DCP(Cpu* cpu, uint8_t opcode) {
+    
+}
+
+void handle_ISB(Cpu* cpu, uint8_t opcode) {
+    
+}
+
+void handle_SLO(Cpu* cpu, uint8_t opcode) {
+    
+}
+
+void handle_RLA(Cpu* cpu, uint8_t opcode) {
+    
+}
+
+void handle_SRE(Cpu* cpu, uint8_t opcode) {
+    
+}
+
+void handle_RRA(Cpu* cpu, uint8_t opcode) {
+    
+}
+
+void handle_SBC_EB(Cpu* cpu, uint8_t opcode) {
+    
 }

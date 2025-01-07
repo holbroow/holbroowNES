@@ -1,0 +1,6 @@
+nestest.nes:    Works, all official opcodes are proper.
+Balloon Fight:  Working fully afaik
+SM Bros:        Menu shows, non selectable, no auto-run
+DKong:          Menu shows, non selectable, auto-runs and is ~controllable, mario renders oddly
+
+

@@ -221,7 +221,6 @@ int main(int argc, char* argv[]) {
 
     }
 
-
     // Clean up - Free NES components from memory
     free(cpu);
     free(ppu);

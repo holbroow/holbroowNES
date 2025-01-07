@@ -112,6 +112,15 @@ typedef enum Instruction {
     BRK,
     NOP,
     RTI,
+    LAX,
+    SAX,
+    DCP,
+    ISB,
+    SLO,
+    RLA,
+    SRE,
+    RRA,
+    SBC_EB,
 } Instruction;
 
 typedef enum AddressingMode {
@@ -220,6 +229,17 @@ void handle_SEI(Cpu* cpu, uint8_t opcode);
 void handle_BRK(Cpu* cpu, uint8_t opcode);
 void handle_NOP(Cpu* cpu, uint8_t opcode);
 void handle_RTI(Cpu* cpu, uint8_t opcode);
+// Illegal/Unofficial opcodes
+void handle_LAX(Cpu* cpu, uint8_t opcode);
+void handle_SAX(Cpu* cpu, uint8_t opcode);
+void handle_DCP(Cpu* cpu, uint8_t opcode);
+void handle_ISB(Cpu* cpu, uint8_t opcode);
+void handle_SLO(Cpu* cpu, uint8_t opcode);
+void handle_RLA(Cpu* cpu, uint8_t opcode);
+void handle_SRE(Cpu* cpu, uint8_t opcode);
+void handle_RRA(Cpu* cpu, uint8_t opcode);
+void handle_SBC_EB(Cpu* cpu, uint8_t opcode);
+
 
 // Helper functions
 uint8_t fetch_operand(Cpu* cpu, AddressingMode mode, uint16_t* address);
