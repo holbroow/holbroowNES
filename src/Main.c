@@ -1,5 +1,5 @@
 // Will Holbrook | Lancaster University Third Year Project 2024 (SCC 300: EmuPC)
-// Main.c (TODO: Expl here!)
+// main.c (TODO: Explain here!)
 
 #define SDL_MAIN_HANDLED
 
@@ -34,7 +34,7 @@ bool run_debug = false;
 int frame_num = 0;
 
 
-// Initialise the NES as aa system (peripherals)
+// Initialise the NES as a system (peripherals)
 void init_nes() {
     // Initialise .nes game ('Cartridge')
     cart = init_cart(file_path);
@@ -75,7 +75,7 @@ void init_display() {
     // Initialise Display
     SDL_Init(SDL_INIT_VIDEO);
     renderer = SDL_CreateRenderer(SDL_CreateWindow("holbroowNES test", 50, 50, NES_WIDTH * SCALE, NES_HEIGHT * SCALE, SDL_WINDOW_SHOWN),
-                                         -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
+                                  -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
     texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA8888,
                                 SDL_TEXTUREACCESS_STREAMING, NES_WIDTH, NES_HEIGHT);
 
@@ -85,49 +85,45 @@ void init_display() {
 // One NES 'clock'
 void nes_clock() {
     // Do one PPU 'clock'
-        ppu_clock(ppu);
+    ppu_clock(ppu);
 
-        // Run 1 cpu 'clock' for every 3 PPU cycles
-        if (nes_cycles_passed % 3 == 0) {
-            if (bus->dma_transfer) {
-                if (bus->dma_dummy) {
-                    if (nes_cycles_passed % 2 == 0) {
-                        bus->dma_dummy = false;
-                    }
-                } else {
-                    // DMA can take place!
-                    if (nes_cycles_passed % 2 == 0)
-                    {
-                        // On even clock cycles, read from CPU bus
-                        bus->dma_data = bus_read(bus, bus->dma_page << 8 | bus->dma_addr);
-                    }
-                    else
-                    {
-                        // On odd clock cycles, write to PPU OAM
-                        bus->ppu->pOAM[bus->dma_addr] = bus->dma_data;
-                        // Increment the lo byte of the address
-                        bus->dma_addr++;
-                        // If this wraps around, we know that 256
-                        // bytes have been written, so end the DMA
-                        // transfer, and proceed as normal
-                        if (bus->dma_addr == 0x00)
-                        {
-                            bus->dma_transfer = false;
-                            bus->dma_dummy = true;
-                        }
-                    }
+    // Run 1 CPU 'clock' for every 3 PPU cycles
+    if (nes_cycles_passed % 3 == 0) {
+        if (bus->dma_transfer) {
+            if (bus->dma_dummy) {
+                if (nes_cycles_passed % 2 == 0) {
+                    bus->dma_dummy = false;
                 }
             } else {
-                cpu_clock(cpu, run_debug, frame_num);
+                // DMA can take place!
+                if (nes_cycles_passed % 2 == 0) {
+                    // On even clock cycles, read from CPU bus
+                    bus->dma_data = bus_read(bus, bus->dma_page << 8 | bus->dma_addr);
+                } else {
+                    // On odd clock cycles, write to PPU OAM
+                    bus->ppu->p_oam[bus->dma_addr] = bus->dma_data;
+                    // Increment the low byte of the address
+                    bus->dma_addr++;
+                    // If this wraps around, we know that 256
+                    // bytes have been written, so end the DMA
+                    // transfer, and proceed as normal
+                    if (bus->dma_addr == 0x00) {
+                        bus->dma_transfer = false;
+                        bus->dma_dummy = true;
+                    }
+                }
             }
+        } else {
+            cpu_clock(cpu, run_debug, frame_num);
         }
+    }
 
-        if (bus->ppu->nmi_occurred) {
-            bus->ppu->nmi_occurred = false;
-            cpu_nmi(cpu, bus);
-        }
+    if (bus->ppu->nmi_occurred) {
+        bus->ppu->nmi_occurred = false;
+        cpu_nmi(cpu, bus);
+    }
 
-        nes_cycles_passed++;
+    nes_cycles_passed++;
 }
 
 // Main function
@@ -144,9 +140,9 @@ int main(int argc, char* argv[]) {
 
     // Debug to check if cart->prg_rom (and therefore redundantly ppu->cart->prg_rom) is of substance
     printf("\n[MANAGER] Program on cartridge:\n");
-    for (size_t i = 0; i < cart->PRGMemory->capacity; i++) {
-        printf("%02X ", cart->PRGMemory->items[i]);
-        
+    for (size_t i = 0; i < cart->prg_memory->capacity; i++) {
+        printf("%02X ", cart->prg_memory->items[i]);
+
         // Print 16 bytes per line
         if ((i + 1) % 16 == 0) {
             printf("\n");
@@ -159,10 +155,7 @@ int main(int argc, char* argv[]) {
 
     // Run the NES!!!
     cpu->running = true;
-    // printf("[CPU] CPU is now running!\n");
-    // printf("\n");
-    // printf("[CPU] Current CPU State:\n");
-    // print_cpu(cpu);
+    printf("[CPU] CPU is now running!\n\n");
 
     const uint32_t frame_duration_ms = 16;          // Store our target of ~60 FPS (16ms per frame)
     uint32_t frame_start_time_ms = SDL_GetTicks();  // Store the start time for initial frame
@@ -210,9 +203,9 @@ int main(int argc, char* argv[]) {
 
             // Attempt to time the frame to achieve ~60fps
             uint32_t frame_end_time_ms = SDL_GetTicks();
-            int delay_time = frame_duration_ms - (frame_end_time_ms - frame_start_time_ms);
+            int delay_time = frame_duration_ms - (int)(frame_end_time_ms - frame_start_time_ms);
             if (delay_time > 0) {
-                SDL_Delay(delay_time);
+                SDL_Delay((Uint32)delay_time);
             }
 
             // Debug to check frequency of 60 frame update events
@@ -223,7 +216,6 @@ int main(int argc, char* argv[]) {
             // Update the start time for the next frame
             frame_start_time_ms = SDL_GetTicks(); // Reset frame timer
         }
-
     }
 
     // Clean up - Free NES components from memory

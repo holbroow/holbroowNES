@@ -1,17 +1,17 @@
 #include <stdint.h>
 
-#include "Mapper.h"
+#include "mapper.h"
 
-Mapper *MapperCreate(uint8_t PRGbanks, uint8_t CHRbanks) {
-    Mapper *mapper = (Mapper*)malloc(sizeof(Mapper));
+Mapper *mapper_create(uint8_t prg_banks, uint8_t chr_banks) {
+    Mapper *new_mapper = (Mapper *)malloc(sizeof(Mapper));
 
-    mapper->PRGbanks = PRGbanks;
-    mapper->CHRbanks = CHRbanks;
+    new_mapper->prg_banks = prg_banks;
+    new_mapper->chr_banks = chr_banks;
 
-    mapper->MapperCpuRead = NULL;
-    mapper->MapperCpuWrite = NULL;
-    mapper->MapperPpuRead = NULL;
-    mapper->MapperPpuWrite = NULL;
+    new_mapper->mapper_cpu_read = NULL;
+    new_mapper->mapper_cpu_write = NULL;
+    new_mapper->mapper_ppu_read = NULL;
+    new_mapper->mapper_ppu_write = NULL;
 
-    return mapper;
+    return new_mapper;
 }

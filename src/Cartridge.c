@@ -2,31 +2,31 @@
 #include "Mapper.h"
 
 typedef struct iNesHeader {
-    char asciiNes[4];
-    uint8_t PRG_chunks;
-    uint8_t CHR_chunks;
+    char ascii_nes[4];
+    uint8_t prg_chunks;
+    uint8_t chr_chunks;
     uint8_t mapper1;
     uint8_t mapper2;
-    uint8_t PRG_ramSize;
-    uint8_t tvSystem1;
-    uint8_t tvSystem2;
-    char unusedPadding[5];
+    uint8_t prg_ram_size;
+    uint8_t tv_system1;
+    uint8_t tv_system2;
+    char unused_padding[5];
 } iNesHeader;
 
 
-Vector *VectorCreate(size_t initialCapacity) {
+Vector *vector_create(size_t initial_capacity) {
     Vector *vector = (Vector*)malloc(sizeof(Vector));
     if (!vector) { 
-        fprintf(stderr, "Could't allocate space for the vector\n");
+        fprintf(stderr, "Couldn't allocate space for the vector\n");
         exit(1);
     }
-    vector->items = (uint8_t*)malloc(initialCapacity*sizeof(uint8_t));
+    vector->items = (uint8_t*)malloc(initial_capacity * sizeof(uint8_t));
     if (!vector->items) {
-        fprintf(stderr, "Could't allocate space for the items of the vector\n");
+        fprintf(stderr, "Couldn't allocate space for the items of the vector\n");
         exit(1);
     }
     vector->size = 0;
-    vector->capacity = initialCapacity;
+    vector->capacity = initial_capacity;
     return vector;
 }
 
@@ -43,31 +43,31 @@ Cartridge* init_cart(const char* filepath) {
     iNesHeader header = {0};
     size_t bytes = fread(&header, sizeof(iNesHeader), 1, file);
 
-    // If we find training information, ignore it as we dont need it :0)
+    // If we find trainer information, ignore it as we don't need it :)
     if (header.mapper1 & 0x04)
         fseek(file, 512, SEEK_CUR);
 
-    // Now we read in the good stuff... the main cartridge contents
+    // Now we read in the main cartridge contents
     Cartridge *cartridge = (Cartridge*)malloc(sizeof(Cartridge));
     if (!cartridge) { 
         fprintf(stderr, "[CARTRIDGE] Couldn't allocate space for the cartridge\n");
         exit(1);
     }
-    // Creaate space for relevant cartridge data
-    cartridge->PRGMemory = VectorCreate(16384*header.PRG_chunks);
-    cartridge->CHRMemory = VectorCreate(8192*header.CHR_chunks);
-    cartridge->nPRGBanks = header.PRG_chunks;
-    cartridge->nCHRBanks = header.CHR_chunks;
-    cartridge->mapperID = ((header.mapper2 >> 4) << 4) | (header.mapper1 >> 4);
+    // Create space for relevant cartridge data
+    cartridge->prg_memory = vector_create(16384 * header.prg_chunks);
+    cartridge->chr_memory = vector_create(8192 * header.chr_chunks);
+    cartridge->n_prg_banks = header.prg_chunks;
+    cartridge->n_chr_banks = header.chr_chunks;
+    cartridge->mapper_id = ((header.mapper2 >> 4) << 4) | (header.mapper1 >> 4);
     cartridge->mirror = (header.mapper1 & 0x01) ? VERTICAL : HORIZONTAL;
 
-    // Store said cartridge data from file, and print for debugging purposes
-    printf("[CARTRIDGE] PRG_chunks = %d\n", header.PRG_chunks);
-    printf("[CARTRIDGE] CHR_chunks = %d\n", header.CHR_chunks);
-    bytes = fread(cartridge->PRGMemory->items, sizeof(uint8_t), 16384*header.PRG_chunks, file);
-    printf("[CARTRIDGE] PRGMemory read = %d\n", bytes);
-    bytes = fread(cartridge->CHRMemory->items, sizeof(uint8_t), 8192*header.CHR_chunks, file);
-    printf("[CARTRIDGE] CHRMemory read = %d\n", bytes);
+    // Store cartridge data from file, and print for debugging purposes
+    printf("[CARTRIDGE] PRG_chunks = %d\n", header.prg_chunks);
+    printf("[CARTRIDGE] CHR_chunks = %d\n", header.chr_chunks);
+    bytes = fread(cartridge->prg_memory->items, sizeof(uint8_t), 16384 * header.prg_chunks, file);
+    printf("[CARTRIDGE] PRGMemory read = %zu\n", bytes);
+    bytes = fread(cartridge->chr_memory->items, sizeof(uint8_t), 8192 * header.chr_chunks, file);
+    printf("[CARTRIDGE] CHRMemory read = %zu\n", bytes);
 
     // Close file as it is no longer needed
     if (fclose(file) != 0) {
@@ -77,12 +77,13 @@ Cartridge* init_cart(const char* filepath) {
 
     // Create mapper and load ROM into it depending on its Mapper ID
     // TODO: Implement further mapper IDs
-    cartridge->mapper = MapperCreate(cartridge->nPRGBanks, cartridge->nCHRBanks);
-    switch (cartridge->mapperID) {
+    cartridge->mapper = mapper_create(cartridge->n_prg_banks, cartridge->n_chr_banks);
+    switch (cartridge->mapper_id) {
         case 0:
-            MapperLoadNROM(cartridge->mapper);
+            mapper_load(cartridge->mapper);
             break;
-        default: printf("[CARTRIDGE] Mapper ID not implemented"); 
+        default:
+            printf("[CARTRIDGE] Mapper ID not implemented\n"); 
             break;
     }
     
@@ -94,8 +95,8 @@ bool cartridge_cpu_read(Cartridge *cartridge, uint16_t addr, uint8_t* data) {
     uint32_t mapped_address = 0;
     Mapper *mapper = cartridge->mapper;
 
-    if (mapper->MapperCpuRead(mapper, addr, &mapped_address)) {
-        *data = cartridge->PRGMemory->items[mapped_address];
+    if (mapper->mapper_cpu_read(mapper, addr, &mapped_address)) {
+        *data = cartridge->prg_memory->items[mapped_address];
         return true;
     }
 
@@ -106,8 +107,8 @@ bool cartridge_cpu_write(Cartridge *cartridge, uint16_t addr, uint8_t data) {
     uint32_t mapped_address = 0;
     Mapper *mapper = cartridge->mapper;
 
-    if (mapper->MapperCpuWrite(mapper, addr, &mapped_address)) {
-        cartridge->PRGMemory->items[mapped_address] = data;
+    if (mapper->mapper_cpu_write(mapper, addr, &mapped_address)) {
+        cartridge->prg_memory->items[mapped_address] = data;
         return true;
     }
 
@@ -118,8 +119,8 @@ bool cartridge_ppu_read(Cartridge *cartridge, uint16_t addr, uint8_t* data) {
     uint32_t mapped_address = 0;
     Mapper *mapper = cartridge->mapper;
 
-    if (mapper->MapperPpuRead(mapper, addr, &mapped_address)) {
-        *data = cartridge->CHRMemory->items[mapped_address];
+    if (mapper->mapper_ppu_read(mapper, addr, &mapped_address)) {
+        *data = cartridge->chr_memory->items[mapped_address];
         return true;
     }
 
@@ -130,8 +131,8 @@ bool cartridge_ppu_write(Cartridge *cartridge, uint16_t addr, uint8_t data) {
     uint32_t mapped_address = 0;
     Mapper *mapper = cartridge->mapper;
 
-    if (mapper->MapperPpuWrite(mapper, addr, &mapped_address)) {
-        cartridge->CHRMemory->items[mapped_address] = data;
+    if (mapper->mapper_ppu_write(mapper, addr, &mapped_address)) {
+        cartridge->chr_memory->items[mapped_address] = data;
         return true;
     }
 

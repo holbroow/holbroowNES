@@ -1,48 +1,48 @@
 #include <stdint.h>
 
-#include "Mapper.h"
+#include "mapper.h"
 
-bool MapperCpuRead(Mapper *mapper, uint16_t address, uint32_t* mappedAddr);
-bool MapperCpuWrite(Mapper *mapper, uint16_t address, uint32_t* mappedAddr);
+bool mapper_cpu_read(Mapper *mapper, uint16_t address, uint32_t *mapped_addr);
+bool mapper_cpu_write(Mapper *mapper, uint16_t address, uint32_t *mapped_addr);
 
-bool MapperPpuRead(Mapper *mapper, uint16_t address, uint32_t* mappedAddr);
-bool MapperPpuWrite(Mapper *mapper, uint16_t address, uint32_t* mappedAddr);
+bool mapper_ppu_read(Mapper *mapper, uint16_t address, uint32_t *mapped_addr);
+bool mapper_ppu_write(Mapper *mapper, uint16_t address, uint32_t *mapped_addr);
 
-void MapperLoadNROM(Mapper *mapper) {
-    mapper->MapperCpuRead = MapperCpuRead;
-    mapper->MapperCpuWrite = MapperCpuWrite;
-    mapper->MapperPpuRead = MapperPpuRead;
-    mapper->MapperPpuWrite = MapperPpuWrite;
+void mapper_load(Mapper *mapper) {
+    mapper->mapper_cpu_read = mapper_cpu_read;
+    mapper->mapper_cpu_write = mapper_cpu_write;
+    mapper->mapper_ppu_read = mapper_ppu_read;
+    mapper->mapper_ppu_write = mapper_ppu_write;
 }
 
-bool MapperCpuRead(Mapper *mapper, uint16_t address, uint32_t* mappedAddr) {
+bool mapper_cpu_read(Mapper *mapper, uint16_t address, uint32_t *mapped_addr) {
     if (address >= 0x8000 && address <= 0xFFFF) {
-        *mappedAddr = address & (mapper->PRGbanks > 1 ? 0x7FFF : 0x3FFF);
+        *mapped_addr = address & (mapper->prg_banks > 1 ? 0x7FFF : 0x3FFF);
         return true;
     }
 
     return false;
 }
 
-bool MapperCpuWrite(Mapper *mapper, uint16_t address, uint32_t* mappedAddr) {
+bool mapper_cpu_write(Mapper *mapper, uint16_t address, uint32_t *mapped_addr) {
     if (address >= 0x8000 && address <= 0xFFFF) {
-        *mappedAddr = address & (mapper->PRGbanks > 1 ? 0x7FFF : 0x3FFF);
+        *mapped_addr = address & (mapper->prg_banks > 1 ? 0x7FFF : 0x3FFF);
         return true;
     }
 
     return false;
 }
 
-bool MapperPpuRead(Mapper *mapper, uint16_t address, uint32_t* mappedAddr) {
+bool mapper_ppu_read(Mapper *mapper, uint16_t address, uint32_t *mapped_addr) {
     if (address >= 0x0000 && address <= 0x1FFF) {
-        *mappedAddr = address;
+        *mapped_addr = address;
         return true;
     }
 
     return false;
 }
 
-bool MapperPpuWrite(Mapper *mapper, uint16_t address, uint32_t* mappedAddr) {
+bool mapper_ppu_write(Mapper *mapper, uint16_t address, uint32_t *mapped_addr) {
     // Not implemented :0/
 
     return false;

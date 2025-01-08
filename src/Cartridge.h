@@ -24,11 +24,11 @@ typedef enum Mirror {
 } Mirror;
 
 typedef struct Cartridge {
-    Vector *PRGMemory;
-    Vector *CHRMemory;
-    uint8_t mapperID;
-    uint8_t nPRGBanks;
-    uint8_t nCHRBanks;
+    Vector *prg_memory;
+    Vector *chr_memory;
+    uint8_t mapper_id;
+    uint8_t n_prg_banks;
+    uint8_t n_chr_banks;
     Mapper *mapper;
     Mirror mirror;
 } Cartridge;
