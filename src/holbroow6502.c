@@ -805,7 +805,7 @@ void cpu_clock(Cpu* cpu, bool run_debug, int frame_num) {
                 handle_SLO(cpu, opcode);
                 break;
             case RLA:
-                haandle_RLA(cpu, opcode);
+                handle_RLA(cpu, opcode);
                 break;
             case SRE:
                 handle_SRE(cpu, opcode);
@@ -1516,29 +1516,6 @@ void handle_ROL(Cpu* cpu, uint8_t opcode) {
     }
 }
 
-// void handle_ROL(Cpu* cpu, uint8_t opcode) {      // why does my proposed + fixed function not work properly still :0/
-//                                                  // something else?  TODO: Come back to this...
-//     cpu->cycles_left += opcode_table[opcode].cycles;
-    
-//     uint16_t address = 0;
-//     uint8_t value;
-//     AddressingMode mode = opcode_table[opcode].addressing_mode;
-//     value = fetch_operand(cpu, mode, &address);
-
-// 	uint8_t temp = (uint16_t)(value << FLAG_CARRY) | cpu->STATUS & FLAG_CARRY;
-
-//     set_carry_flag(cpu, temp & 0xFF00);
-//     set_zero_flag(cpu, (temp & 0x00FF) == 0x0000);
-//     set_negative_flag(cpu, temp & 0x0080);
-
-//     // This op has different Address mode
-// 	if (mode == IMP) {
-// 		cpu->A = temp & 0x00FF;
-//     } else {
-//         bus_write(cpu->bus, address, temp & 0x00FF);
-//     }
-// }
-
 void handle_ROR(Cpu* cpu, uint8_t opcode) {
     cpu->cycles_left += opcode_table[opcode].cycles;
 
@@ -1787,41 +1764,53 @@ void handle_RTI(Cpu* cpu, uint8_t opcode) {
 
 void handle_NOP(Cpu* cpu, uint8_t opcode) {
     cpu->cycles_left += opcode_table[opcode].cycles;
-    // NOP does nothing else
+    // NOP does nothing else :0)
 }
 
+// Empty functions for prospective possible implementation of some unofficial/illegal opcodes:
+// NOTE: These aren't important for most, if not all, commercial NES games, but seem to be for some homebrew implementations...
+    // Therefore, however, this is not too importnat to me unless I find myself with excess time (unlikely)
 void handle_LAX(Cpu* cpu, uint8_t opcode) {
+    cpu->cycles_left += opcode_table[opcode].cycles;
 
 }
 
 void handle_SAX(Cpu* cpu, uint8_t opcode) {
-    
+    cpu->cycles_left += opcode_table[opcode].cycles;
+
 }
 
 void handle_DCP(Cpu* cpu, uint8_t opcode) {
-    
+    cpu->cycles_left += opcode_table[opcode].cycles;
+
 }
 
 void handle_ISB(Cpu* cpu, uint8_t opcode) {
-    
+    cpu->cycles_left += opcode_table[opcode].cycles;
+
 }
 
 void handle_SLO(Cpu* cpu, uint8_t opcode) {
-    
+    cpu->cycles_left += opcode_table[opcode].cycles;
+
 }
 
 void handle_RLA(Cpu* cpu, uint8_t opcode) {
-    
+    cpu->cycles_left += opcode_table[opcode].cycles;
+
 }
 
 void handle_SRE(Cpu* cpu, uint8_t opcode) {
-    
+    cpu->cycles_left += opcode_table[opcode].cycles;
+
 }
 
 void handle_RRA(Cpu* cpu, uint8_t opcode) {
-    
+    cpu->cycles_left += opcode_table[opcode].cycles;
+
 }
 
 void handle_SBC_EB(Cpu* cpu, uint8_t opcode) {
-    
+    cpu->cycles_left += opcode_table[opcode].cycles;
+
 }

@@ -172,14 +172,19 @@ int main(int argc, char* argv[]) {
         // Handle any key presses (controller activity)
         const Uint8 *state = SDL_GetKeyboardState(NULL);
         bus->controller[0] = 0x00;
-        if (state[SDL_SCANCODE_Z])          bus->controller[0] |= 0x80;    // A        (Key Z)
-        if (state[SDL_SCANCODE_X])          bus->controller[0] |= 0x40;    // B        (Key X)
-        if (state[SDL_SCANCODE_TAB])        bus->controller[0] |= 0x20;    // Select   (Key SELECT)
-        if (state[SDL_SCANCODE_RETURN])     bus->controller[0] |= 0x10;    // Start    (Key ENTER/RETURN)
-        if (state[SDL_SCANCODE_UP])         bus->controller[0] |= 0x08;    // Up       (Key UP ARR)
-        if (state[SDL_SCANCODE_DOWN])       bus->controller[0] |= 0x04;    // Down     (Key DOWN ARR)
-        if (state[SDL_SCANCODE_LEFT])       bus->controller[0] |= 0x02;    // Left     (Key LEFT ARR)
-        if (state[SDL_SCANCODE_RIGHT])      bus->controller[0] |= 0x01;    // Right    (Key RIGHT ARR)
+        if (state[SDL_SCANCODE_Z])          bus->controller[0] |= 0x80;     // A        (Key Z)
+        if (state[SDL_SCANCODE_X])          bus->controller[0] |= 0x40;     // B        (Key X)
+        if (state[SDL_SCANCODE_TAB])        bus->controller[0] |= 0x20;     // Select   (Key SELECT)
+        if (state[SDL_SCANCODE_RETURN])     bus->controller[0] |= 0x10;     // Start    (Key ENTER/RETURN)
+        if (state[SDL_SCANCODE_UP])         bus->controller[0] |= 0x08;     // Up       (Key UP ARR)
+        if (state[SDL_SCANCODE_DOWN])       bus->controller[0] |= 0x04;     // Down     (Key DOWN ARR)
+        if (state[SDL_SCANCODE_LEFT])       bus->controller[0] |= 0x02;     // Left     (Key LEFT ARR)
+        if (state[SDL_SCANCODE_RIGHT])      bus->controller[0] |= 0x01;     // Right    (Key RIGHT ARR)
+
+        // if (state[SDL_SCANCODE_R]) {                                        // RESET    (Key R)
+        //     cpu_reset(cpu, bus);
+        //     nes_cycles_passed = 0;
+        // }
 
         // Do 1 NES 'clock'
         nes_clock();
