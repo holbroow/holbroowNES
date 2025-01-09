@@ -1,4 +1,6 @@
 // Bus.c
+// Nintendo Entertainment System Bus Implementation
+// Will Holbrook - 20th October 2024
 #include "Bus.h"
 #include "PPU.h"
 #include "Cartridge.h"

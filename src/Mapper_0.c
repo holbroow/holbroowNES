@@ -1,6 +1,9 @@
+// Mapper_0.c
+// Nintendo Entertainment System Mapper 0 (NROM) Implementation
+// Will Holbrook - 3rd January 2025
 #include <stdint.h>
 
-#include "mapper.h"
+#include "Mapper.h"
 
 bool mapper_cpu_read(Mapper *mapper, uint16_t address, uint32_t *mapped_addr);
 bool mapper_cpu_write(Mapper *mapper, uint16_t address, uint32_t *mapped_addr);
@@ -8,7 +11,7 @@ bool mapper_cpu_write(Mapper *mapper, uint16_t address, uint32_t *mapped_addr);
 bool mapper_ppu_read(Mapper *mapper, uint16_t address, uint32_t *mapped_addr);
 bool mapper_ppu_write(Mapper *mapper, uint16_t address, uint32_t *mapped_addr);
 
-void mapper_load(Mapper *mapper) {
+void mapper_load_0(Mapper *mapper) {
     mapper->mapper_cpu_read = mapper_cpu_read;
     mapper->mapper_cpu_write = mapper_cpu_write;
     mapper->mapper_ppu_read = mapper_ppu_read;

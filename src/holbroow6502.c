@@ -1,6 +1,7 @@
-// Will Holbrook | Lancaster University Third Year Project 2024 (SCC 300: EmuPC)
-// holbroow6502.c (Cpu with defined, and handled, addressing modes, instructions, and therefore opcodes!)
+// holbroow6502.c
+// Nintendo Entertainment System CPU Implementation (MOS Technology 6502)
 // NOTE: This is the 2A03 cpu (NTSC 60hz at 1.79Mhz, not the "2A07 (PAL at 50hz and 1.66Mhz)"
+// Will Holbrook - 20th October 2024
 
 // Great resource, this file and its concepts are mostly developed using this datasheet.
 // https://www.nesdev.org/obelisk-6502-guide
@@ -832,6 +833,7 @@ void cpu_clock(Cpu* cpu, bool run_debug, int frame_num) {
         //     print_cpu(cpu);
         // }
     }
+    // Attempt to make the CPU somewhat cycle accurate (cycles_left is modified within instructions)
     cpu->cycle_count++;
     cpu->cycles_left--;
 }
@@ -840,8 +842,8 @@ void cpu_clock(Cpu* cpu, bool run_debug, int frame_num) {
 void cpu_reset(Cpu* cpu, Bus* bus) {
 	uint16_t lo = bus_read(bus, 0xFFFC + 0);
 	uint16_t hi = bus_read(bus, 0xFFFC + 1);
-
-	cpu->PC = (hi << 8) | lo;
+    uint16_t reset_vector = (hi << 8) | lo;
+	cpu->PC = reset_vector;
 
 	cpu->A = 0x00;
 	cpu->X = 0x00;

@@ -1,3 +1,6 @@
+// Cartridge.h
+// Nintendo Entertainment System Cartridge Implementation (Header File)
+// Will Holbrook - 20th December 2024
 #pragma once
 
 #include <stdint.h>

@@ -1,5 +1,8 @@
-// Will Holbrook | Lancaster University Third Year Project 2024 (SCC 300: EmuPC)
-// main.c (TODO: Explain here!)
+// Will Holbrook | NES Emulator in C | Lancaster University Third Year Project 2024 (SCC 300: EmuPC)
+
+// Main.c
+// Nintendo Entertainment System Implementation (This runs the NES!)
+// Will Holbrook - Created 18th October 2024
 
 #define SDL_MAIN_HANDLED
 
@@ -17,8 +20,8 @@
 #include <SDL2/SDL.h>
 
 // Define display parameters
-#define NES_WIDTH 256   // Pixel 'Width' of NES res
-#define NES_HEIGHT 240  // Pixel 'Height' of NES res
+#define NES_WIDTH 256   // Screen pixel 'Width' of NES res
+#define NES_HEIGHT 240  // Screen pixel 'Height' of NES res
 #define SCALE 3         // Scale factor for improved visibility
 
 const char* file_path;
@@ -157,14 +160,14 @@ int main(int argc, char* argv[]) {
     cpu->running = true;
     printf("[CPU] CPU is now running!\n\n");
 
-    const uint32_t frame_duration_ms = 16;          // Store our target of ~60 FPS (16ms per frame)
-    uint32_t frame_start_time_ms = SDL_GetTicks();  // Store the start time for initial frame
+    const uint32_t frame_duration_ms = 16;              // Store our target of ~60 FPS (16ms per frame)
+    uint32_t frame_start_time_ms = SDL_GetTicks();      // Store the start time for initial frame
+    const Uint8 *state = SDL_GetKeyboardState(NULL);    // Configure a value to store keyboard's 'state' (what is/isn't pressed)
 
     // Run the NES!
     while (cpu->running) {
         // Handle any key presses (controller activity)
-        const Uint8 *state = SDL_GetKeyboardState(NULL);
-        bus->controller[0] = 0x00;
+        bus->controller[0] = 0x00;                                          // Initiate Controller 0 (1st controller)
         if (state[SDL_SCANCODE_Z])          bus->controller[0] |= 0x80;     // A        (Key Z)
         if (state[SDL_SCANCODE_X])          bus->controller[0] |= 0x40;     // B        (Key X)
         if (state[SDL_SCANCODE_TAB])        bus->controller[0] |= 0x20;     // Select   (Key SELECT)
@@ -173,7 +176,6 @@ int main(int argc, char* argv[]) {
         if (state[SDL_SCANCODE_DOWN])       bus->controller[0] |= 0x04;     // Down     (Key DOWN ARR)
         if (state[SDL_SCANCODE_LEFT])       bus->controller[0] |= 0x02;     // Left     (Key LEFT ARR)
         if (state[SDL_SCANCODE_RIGHT])      bus->controller[0] |= 0x01;     // Right    (Key RIGHT ARR)
-
         // if (state[SDL_SCANCODE_R]) {                                        // RESET    (Key R)
         //     cpu_reset(cpu, bus);
         //     nes_cycles_passed = 0;
@@ -205,7 +207,7 @@ int main(int argc, char* argv[]) {
             uint32_t frame_end_time_ms = SDL_GetTicks();
             int delay_time = frame_duration_ms - (int)(frame_end_time_ms - frame_start_time_ms);
             if (delay_time > 0) {
-                SDL_Delay((Uint32)delay_time);
+                SDL_Delay((uint32_t)delay_time);
             }
 
             // Debug to check frequency of 60 frame update events

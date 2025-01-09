@@ -1,4 +1,6 @@
 // Bus.h
+// Nintendo Entertainment System Bus Implementation (Header File)
+// Will Holbrook - 20th October 2024
 #pragma once
 
 #include <stdint.h>

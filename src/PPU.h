@@ -1,4 +1,6 @@
 // PPU.h
+// Nintendo Entertainment System PPU Implementation (2C02) (Header File)
+// Will Holbrook - 1st December 2024
 #pragma once
 
 #include "Cartridge.h"
@@ -36,7 +38,7 @@ typedef union PpuCtrl {
         uint8_t sprite_size : 1;
         uint8_t slave_mode : 1;   // unused
         uint8_t enable_nmi : 1;
-    } bits;
+    };
     uint8_t reg;
 } PpuCtrl;
 
@@ -46,7 +48,7 @@ typedef union PpuStatus {
         uint8_t sprite_overflow : 1;
         uint8_t sprite_zero_hit : 1;
         uint8_t vertical_blank : 1;
-    } bits;
+    };
     uint8_t reg;
 } PpuStatus;
 
@@ -60,7 +62,7 @@ typedef union PpuMask {
         uint8_t enhance_red : 1;
         uint8_t enhance_green : 1;
         uint8_t enhance_blue : 1;
-    } bits;
+    };
     uint8_t reg;
 } PpuMask;
 
@@ -79,15 +81,15 @@ typedef union LoopyRegister {
         uint16_t nametable_y : 1;
         uint16_t fine_y : 3;
         uint16_t unused : 1;
-    } bits;
+    };
     uint16_t reg;
 } LoopyRegister;
 
 typedef struct sObjectAttributeEntry {
-    uint8_t y;          // Y position of sprite
-    uint8_t id;         // ID of tile from pattern memory
-    uint8_t attribute;  // Flags define how sprite should be rendered
-    uint8_t x;          // X position of sprite
+    uint8_t y;          // Sprite 'Y' pos
+    uint8_t id;         // ID of 'tile' within pattern memory
+    uint8_t attribute;  // Rendering Flags for sprite
+    uint8_t x;          // Sprite 'X' pos
 } sObjectAttributeEntry;
 
 // PPU structure

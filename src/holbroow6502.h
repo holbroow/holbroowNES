@@ -1,4 +1,7 @@
 // holbroow6502.h
+// Nintendo Entertainment System CPU Implementation (MOS Technology 6502) (Header File)
+// NOTE: This is the 2A03 cpu (NTSC 60hz at 1.79Mhz, not the "2A07 (PAL at 50hz and 1.66Mhz)"
+// Will Holbrook - 20th October 2024
 #pragma once
 
 #include "Bus.h"

@@ -58,6 +58,9 @@
   "C_Cpp_Runner.msvcSecureNoWarnings": false,
   "files.associations": {
     "stdint.h": "c",
-    "cartridge.h": "c"
+    "cartridge.h": "c",
+    "stdio.h": "c",
+    "mapper.h": "c",
+    "stdlib.h": "c"
   }
 }

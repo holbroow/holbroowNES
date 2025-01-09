@@ -1,4 +1,6 @@
 // PPU.c
+// Nintendo Entertainment System PPU Implementation (2C02) 
+// Will Holbrook - 1st December 2024
 #include "PPU.h"
 #include "Cartridge.h"
 
@@ -9,79 +11,87 @@
 
 
 static const uint32_t NES_PALETTE[64] = {
-    // We have appended 0xFF as the LSB to signify a max 'alpha' value in RGBA8888 hex
-    0x7C7C7CFF, // 0: Background Color (Black)
-    0x0000FCFF, // 1
-    0x0000BCFF, // 2
-    0x4428BCFF, // 3
-    0x940084FF, // 4
-    0xA80020FF, // 5
-    0xA81000FF, // 6
-    0x881400FF, // 7
-    0x503000FF, // 8
-    0x007800FF, // 9
-    0x006800FF, // 10
-    0x005800FF, // 11
-    0x004058FF, // 12
-    0x000000FF, // 13
-    0x000000FF, // 14
-    0x000000FF, // 15
-    0xBCBCBCFF, // 16
-    0x0078F8FF, // 17
-    0x0058F8FF, // 18
-    0x6844FCFF, // 19
-    0xD800CCFF, // 20
-    0xE40058FF, // 21
-    0xF83800FF, // 22
-    0xE45C10FF, // 23
-    0xAC7C00FF, // 24
-    0x00B800FF, // 25
-    0x00A800FF, // 26
-    0x00A844FF, // 27
-    0x008888FF, // 28
-    0x000000FF, // 29
-    0x000000FF, // 30
-    0x000000FF, // 31
-    0xF8F8F8FF, // 32
-    0x3CBCFCFF, // 33
-    0x6888FCFF, // 34
-    0x9878F8FF, // 35
-    0xF878F8FF, // 36
-    0xF85898FF, // 37
-    0xF87858FF, // 38
-    0xFCA044FF, // 39
-    0xF8B800FF, // 40
-    0xB8F818FF, // 41
-    0x58D854FF, // 42
-    0x58F898FF, // 43
-    0x00E8D8FF, // 44
-    0x787878FF, // 45
-    0x000000FF, // 46
-    0x000000FF, // 47
-    0xFCFCFCFF, // 48
-    0xA4E4FCFF, // 49
-    0xB8B8F8FF, // 50
-    0xD8B8F8FF, // 51
-    0xF8B8F8FF, // 52
-    0xF8A4C0FF, // 53
-    0xF0D0B0FF, // 54
-    0xFCE0A8FF, // 55
-    0xF8D878FF, // 56
-    0xD8F878FF, // 57
-    0xB8F8B8FF, // 58
-    0xB8F8D8FF, // 59
-    0x00FCFCFF, // 60
-    0xF8D8F8FF, // 61
-    0x000000FF, // 62
-    0x000000FF  // 63
+    /* This suggested palette is found under the heading 'Recommended emulator palette' 
+       at the following link and is "is the idealized 2C02 composite palette with the 
+       user-adjustable hue set to -15 degrees to yield pure blue, red, yellow and cyan", 
+       this is an important acknowledgement as there were many different PPU's depending 
+       on many factors, with the most common being the 2C02. */
+    // REF: https://www.nesdev.org/wiki/PPU_programmer_reference#Summary
+
+    0x626262, // 0
+    0x002A93, // 1
+    0x0000BC, // 2
+    0x3E00BC, // 3
+    0X6C0093, // 4
+    0x86094C, // 5
+    0x860C06, // 6
+    0x6C1D06, // 7
+    0x3C3609, // 8
+    0x004F0F, // 9
+    0x005B13, // 10
+    0x005913, // 11
+    0x00484D, // 12
+    0x000000, // 13
+    0x000000, // 14
+    0x000000, // 15
+    0xABABAB, // 16
+    0x0060ED, // 17
+    0x2F34F7, // 18
+    0x7C09F7, // 19
+    0xB901ED, // 20
+    0xDD1C8C, // 21
+    0xDD2E24, // 22
+    0xB94B16, // 23
+    0x77701C, // 24
+    0x009024, // 25
+    0x00A029, // 26
+    0x009E32, // 27
+    0x00878E, // 28
+    0x000000, // 29
+    0x000000, // 30
+    0x000000, // 31
+    0xFFFFFF, // 32
+    0x03B3FA, // 33
+    0x838AF9, // 34
+    0xD269F8, // 35
+    0xFF5AF8, // 36
+    0xFF5EDD, // 37
+    0xFF776D, // 38
+    0xFF9A30, // 39
+    0xCAC238, // 40
+    0x6DE340, // 41
+    0x00F445, // 42
+    0x00F179, // 43
+    0x00D9E1, // 44
+    0x4E4E4E, // 45
+    0x000000, // 46
+    0x000000, // 47
+    0xFFFFFF, // 48
+    0xADE0FD, // 49
+    0xCDD0FC, // 50
+    0xEEC3FC, // 51
+    0xFFBDFB, // 52
+    0xFFBEF1, // 53
+    0xFFC7C4, // 54
+    0xFFD6A0, // 55
+    0xEAE78C, // 56
+    0xC8F48D, // 57
+    0xA8FBA3, // 58
+    0x97F9C7, // 59
+    0x99EFF3, // 60
+    0xB8B8B8, // 61
+    0x000000, // 62
+    0x000000  // 63
 };
 
 static inline uint32_t get_palette_colour(uint8_t i) {
     // Mask the index to ensure an index of 0-63
     // Convert colour in NES palette to colour that SDL can understand
-    // I believe SDL understand colours as a 32 bit integer eg. 0xFF FF FF FF.
-    uint8_t index = i & 0x3F;
-    return NES_PALETTE[index];
+    // SDL (as i've configured it (RGBA8888)) understands colours as a 32 bit integer eg. 0xFF FF FF FF.
+    //                                                                             where: 0xRR BB GG AA
+
+    uint8_t index = i & 0x3F;                       // Get intended colour from the NES_PALLETTE within 0-63 range
+    return 0x000000FF | NES_PALETTE[index] << 8;    // Return value with max alpha value (AA) appended to the LSB.
 }
 
 Ppu* init_ppu() {
@@ -186,50 +196,50 @@ static inline uint8_t flipbyte(uint8_t b)
 }
 
 void ppu_increment_scroll_x(Ppu* ppu) {
-    if (ppu->registers.mask.bits.render_background || ppu->registers.mask.bits.render_sprites) {
-        if (ppu->vram_addr.bits.coarse_x == 31) {
-            ppu->vram_addr.bits.coarse_x = 0;
-            ppu->vram_addr.bits.nametable_x = ~ppu->vram_addr.bits.nametable_x;
+    if (ppu->registers.mask.render_background || ppu->registers.mask.render_sprites) {
+        if (ppu->vram_addr.coarse_x == 31) {
+            ppu->vram_addr.coarse_x = 0;
+            ppu->vram_addr.nametable_x = ~ppu->vram_addr.nametable_x;
         }
         else {
-            ppu->vram_addr.bits.coarse_x++;
+            ppu->vram_addr.coarse_x++;
         }
     }
 }
 
 void ppu_increment_scroll_y(Ppu* ppu) {
-    if (ppu->registers.mask.bits.render_background || ppu->registers.mask.bits.render_sprites) {
-        if (ppu->vram_addr.bits.fine_y < 7) {
-            ppu->vram_addr.bits.fine_y++;
+    if (ppu->registers.mask.render_background || ppu->registers.mask.render_sprites) {
+        if (ppu->vram_addr.fine_y < 7) {
+            ppu->vram_addr.fine_y++;
         }
         else {
-            ppu->vram_addr.bits.fine_y = 0;
-            if (ppu->vram_addr.bits.coarse_y == 29) {
-                ppu->vram_addr.bits.coarse_y = 0;
-                ppu->vram_addr.bits.nametable_y = ~ppu->vram_addr.bits.nametable_y;
+            ppu->vram_addr.fine_y = 0;
+            if (ppu->vram_addr.coarse_y == 29) {
+                ppu->vram_addr.coarse_y = 0;
+                ppu->vram_addr.nametable_y = ~ppu->vram_addr.nametable_y;
             }
-            else if (ppu->vram_addr.bits.coarse_y == 31) {
-                ppu->vram_addr.bits.coarse_y = 0;
+            else if (ppu->vram_addr.coarse_y == 31) {
+                ppu->vram_addr.coarse_y = 0;
             }
             else {
-                ppu->vram_addr.bits.coarse_y++;
+                ppu->vram_addr.coarse_y++;
             }
         }
     }
 }
 
 void ppu_transfer_address_x(Ppu* ppu) {
-    if (ppu->registers.mask.bits.render_background || ppu->registers.mask.bits.render_sprites) {
-        ppu->vram_addr.bits.nametable_x = ppu->tram_addr.bits.nametable_x;
-        ppu->vram_addr.bits.coarse_x = ppu->tram_addr.bits.coarse_x;
+    if (ppu->registers.mask.render_background || ppu->registers.mask.render_sprites) {
+        ppu->vram_addr.nametable_x = ppu->tram_addr.nametable_x;
+        ppu->vram_addr.coarse_x = ppu->tram_addr.coarse_x;
     }
 }
 
 void ppu_transfer_address_y(Ppu* ppu) {
-    if (ppu->registers.mask.bits.render_background || ppu->registers.mask.bits.render_sprites) {
-        ppu->vram_addr.bits.fine_y = ppu->tram_addr.bits.fine_y;
-        ppu->vram_addr.bits.nametable_y = ppu->tram_addr.bits.nametable_y;
-        ppu->vram_addr.bits.coarse_y = ppu->tram_addr.bits.coarse_y;
+    if (ppu->registers.mask.render_background || ppu->registers.mask.render_sprites) {
+        ppu->vram_addr.fine_y = ppu->tram_addr.fine_y;
+        ppu->vram_addr.nametable_y = ppu->tram_addr.nametable_y;
+        ppu->vram_addr.coarse_y = ppu->tram_addr.coarse_y;
     }
 }
 
@@ -241,14 +251,14 @@ void ppu_load_bg_shifters(Ppu* ppu) {
 }
 
 void ppu_update_shifters(Ppu* ppu) {
-    if (ppu->registers.mask.bits.render_background) {
+    if (ppu->registers.mask.render_background) {
         ppu->bg_shifter_pattern_lo <<= 1;
         ppu->bg_shifter_pattern_hi <<= 1;
         ppu->bg_shifter_attrib_lo <<= 1;
         ppu->bg_shifter_attrib_hi <<= 1;
     }
 
-    if (ppu->registers.mask.bits.render_sprites && ppu->cycle >= 1 && ppu->cycle < 258) {
+    if (ppu->registers.mask.render_sprites && ppu->cycle >= 1 && ppu->cycle < 258) {
         for (size_t i = 0; i < ppu->sprite_count; i++)
         {
             if (ppu->sprite_scanline[i].x > 0) {
@@ -265,13 +275,13 @@ void ppu_clock(Ppu* ppu) {
     if (ppu->scanline >= -1 && ppu->scanline < 240) {
         if (ppu->scanline == 0 && ppu->cycle == 0 
             && (ppu->frames_completed % 2 != 0) 
-            && (ppu->registers.mask.bits.render_background || ppu->registers.mask.bits.render_sprites)) {
+            && (ppu->registers.mask.render_background || ppu->registers.mask.render_sprites)) {
             ppu->cycle = 1;
         }
         if (ppu->scanline == -1 && ppu->cycle == 1) {
-            ppu->registers.status.bits.vertical_blank = 0;
-            ppu->registers.status.bits.sprite_overflow = 0;
-            ppu->registers.status.bits.sprite_zero_hit = 0;
+            ppu->registers.status.vertical_blank = 0;
+            ppu->registers.status.sprite_overflow = 0;
+            ppu->registers.status.sprite_zero_hit = 0;
             for (size_t i = 0; i < 8; i++) {
                 ppu->sprite_shifter_pattern_lo[i] = 0;
                 ppu->sprite_shifter_pattern_hi[i] = 0;
@@ -288,25 +298,25 @@ void ppu_clock(Ppu* ppu) {
                 case 2:
                     ppu->bg_next_tile_attr = ppu_read(ppu, 
                         0x23C0 
-                        | (ppu->vram_addr.bits.nametable_y << 11)
-                        | (ppu->vram_addr.bits.nametable_x << 10)
-                        | ((ppu->vram_addr.bits.coarse_y >> 2) << 3)
-                        | (ppu->vram_addr.bits.coarse_x >> 2)); 
-                    if (ppu->vram_addr.bits.coarse_y & 0x02) ppu->bg_next_tile_attr >>= 4;
-                    if (ppu->vram_addr.bits.coarse_x & 0x02) ppu->bg_next_tile_attr >>= 2;
+                        | (ppu->vram_addr.nametable_y << 11)
+                        | (ppu->vram_addr.nametable_x << 10)
+                        | ((ppu->vram_addr.coarse_y >> 2) << 3)
+                        | (ppu->vram_addr.coarse_x >> 2)); 
+                    if (ppu->vram_addr.coarse_y & 0x02) ppu->bg_next_tile_attr >>= 4;
+                    if (ppu->vram_addr.coarse_x & 0x02) ppu->bg_next_tile_attr >>= 2;
                     ppu->bg_next_tile_attr &= 0x03;
                     break;
                 case 4:
                     ppu->bg_next_tile_lsb = ppu_read(ppu, 
-                        (ppu->registers.ctrl.bits.pattern_background << 12)
+                        (ppu->registers.ctrl.pattern_background << 12)
                         + ((uint16_t)ppu->bg_next_tile_id << 4)
-                        + (ppu->vram_addr.bits.fine_y) + 0);
+                        + (ppu->vram_addr.fine_y) + 0);
                     break;
                 case 6:
                     ppu->bg_next_tile_msb = ppu_read(ppu, 
-                        (ppu->registers.ctrl.bits.pattern_background << 12)
+                        (ppu->registers.ctrl.pattern_background << 12)
                         + ((uint16_t)ppu->bg_next_tile_id << 4)
-                        + (ppu->vram_addr.bits.fine_y) + 8);
+                        + (ppu->vram_addr.fine_y) + 8);
                     break;
                 case 7:
                     ppu_increment_scroll_x(ppu);
@@ -345,7 +355,7 @@ void ppu_clock(Ppu* ppu) {
         while (n_oam_entry < 64 && ppu->sprite_count < 9) {
             int16_t diff = ((int16_t)ppu->scanline - (int16_t)ppu->oam[n_oam_entry].y);
             
-            if (diff >= 0 && diff < (ppu->registers.ctrl.bits.sprite_size ? 16 : 8) 
+            if (diff >= 0 && diff < (ppu->registers.ctrl.sprite_size ? 16 : 8) 
                 && ppu->sprite_count < 8) {
                 if (ppu->sprite_count < 8) {
                     if (n_oam_entry == 0) {
@@ -360,7 +370,7 @@ void ppu_clock(Ppu* ppu) {
             n_oam_entry++;
         }
         // Set sprite overflow flag
-        ppu->registers.status.bits.sprite_overflow = (ppu->sprite_count >= 8);
+        ppu->registers.status.sprite_overflow = (ppu->sprite_count >= 8);
     }
 
     if (ppu->cycle == 340) {
@@ -368,24 +378,24 @@ void ppu_clock(Ppu* ppu) {
             uint8_t sprite_pattern_bits_lo, sprite_pattern_bits_hi;
             uint16_t sprite_pattern_addr_lo, sprite_pattern_addr_hi;
 
-            if (!ppu->registers.ctrl.bits.sprite_size) {
+            if (!ppu->registers.ctrl.sprite_size) {
                 // 8x8 Sprite
                 if (!(ppu->sprite_scanline[i].attribute & 0x80)) {
                     // Sprite normal
                     sprite_pattern_addr_lo = 
-                        (ppu->registers.ctrl.bits.pattern_sprite << 12)
+                        (ppu->registers.ctrl.pattern_sprite << 12)
                       | (ppu->sprite_scanline[i].id << 4)
                       | (ppu->scanline - ppu->sprite_scanline[i].y);
                 } else {
                     // Sprite flipped vertically
                     if (ppu->scanline - ppu->sprite_scanline[i].y < 8) {
                         sprite_pattern_addr_lo = 
-                            (ppu->registers.ctrl.bits.pattern_sprite << 12)
+                            (ppu->registers.ctrl.pattern_sprite << 12)
                           | (ppu->sprite_scanline[i].id << 4)
                           | (7 - (ppu->scanline - ppu->sprite_scanline[i].y));
                     } else {
                         sprite_pattern_addr_lo = 
-                            (ppu->registers.ctrl.bits.pattern_sprite << 12)
+                            (ppu->registers.ctrl.pattern_sprite << 12)
                           | (ppu->sprite_scanline[i].id << 4)
                           | (7 - (ppu->scanline - ppu->sprite_scanline[i].y));
                     }
@@ -450,8 +460,8 @@ void ppu_clock(Ppu* ppu) {
 
     if (ppu->scanline >= 241 && ppu->scanline < 261) {
         if (ppu->scanline == 241 && ppu->cycle == 1) {
-            ppu->registers.status.bits.vertical_blank = 1;
-            if (ppu->registers.ctrl.bits.enable_nmi) {
+            ppu->registers.status.vertical_blank = 1;
+            if (ppu->registers.ctrl.enable_nmi) {
                 ppu->nmi_occurred = true;
             }
         }
@@ -460,8 +470,8 @@ void ppu_clock(Ppu* ppu) {
     uint8_t bg_pixel = 0x00;
     uint8_t bg_palette = 0x00;
 
-    if (ppu->registers.mask.bits.render_background) {
-        if (ppu->registers.mask.bits.render_background_left || (ppu->cycle >= 9)) {
+    if (ppu->registers.mask.render_background) {
+        if (ppu->registers.mask.render_background_left || (ppu->cycle >= 9)) {
             uint16_t bit_mux = 0x8000 >> ppu->fine_x;
             uint8_t p0_pixel = (ppu->bg_shifter_pattern_lo & bit_mux) > 0;
             uint8_t p1_pixel = (ppu->bg_shifter_pattern_hi & bit_mux) > 0;
@@ -477,8 +487,8 @@ void ppu_clock(Ppu* ppu) {
     uint8_t fg_palette = 0x00; 
     uint8_t fg_priority = 0x00;
 
-    if (ppu->registers.mask.bits.render_sprites) {
-        if (ppu->registers.mask.bits.render_sprites_left || (ppu->cycle >= 9)) {
+    if (ppu->registers.mask.render_sprites) {
+        if (ppu->registers.mask.render_sprites_left || (ppu->cycle >= 9)) {
             ppu->b_sprite_zero_being_rendered = false;
             for (uint8_t i = 0; i < ppu->sprite_count; i++) {
                 if (ppu->sprite_scanline[i].x == 0) {
@@ -526,16 +536,16 @@ void ppu_clock(Ppu* ppu) {
 
         // Sprite zero hit check
         if (ppu->b_sprite_zero_hit_possible && ppu->b_sprite_zero_being_rendered) {
-            if (ppu->registers.mask.bits.render_background 
-                & ppu->registers.mask.bits.render_sprites) {
-                if (!(ppu->registers.mask.bits.render_background_left 
-                      | ppu->registers.mask.bits.render_sprites_left)) {
+            if (ppu->registers.mask.render_background 
+                & ppu->registers.mask.render_sprites) {
+                if (!(ppu->registers.mask.render_background_left 
+                      | ppu->registers.mask.render_sprites_left)) {
                     if (ppu->cycle >= 9 && ppu->cycle < 258) {
-                        ppu->registers.status.bits.sprite_zero_hit = 1;
+                        ppu->registers.status.sprite_zero_hit = 1;
                     }
                 } else {
                     if (ppu->cycle >= 1 && ppu->cycle < 258) {
-                        ppu->registers.status.bits.sprite_zero_hit = 1;
+                        ppu->registers.status.sprite_zero_hit = 1;
                     }
                 }
             }
@@ -545,16 +555,17 @@ void ppu_clock(Ppu* ppu) {
     // Update framebuffer
     if ((ppu->cycle - 1) >= 0 && (ppu->cycle - 1) < PPU_SCREEN_WIDTH 
         && ppu->scanline >= 0 && ppu->scanline < PPU_SCREEN_HEIGHT) {
-        ppu->framebuffer[ppu->scanline * PPU_SCREEN_WIDTH + (ppu->cycle - 1)] =
-            get_palette_colour(ppu_read(ppu, 0x3F00 + (palette << 2) + pixel));
+        ppu->framebuffer[ppu->scanline * PPU_SCREEN_WIDTH + (ppu->cycle - 1)] = (
+            get_palette_colour(ppu_read(ppu, 0x3F00 + (palette << 2) + pixel))
+        );
     }
 
     // Advance renderer
     ppu->cycle++;
-    if (ppu->registers.mask.bits.render_background || ppu->registers.mask.bits.render_sprites) {
+    if (ppu->registers.mask.render_background || ppu->registers.mask.render_sprites) {
         if (ppu->cycle == 260 && ppu->scanline < 240) {
-            // Typically where Mappers 4/5 intercept to handle special scanline IRQ
-            // Not yet implemented
+            // Typically where Mappers 4/5 intercept to handle a special scanline interrupt
+            // I haven't implemented this yet, and won't obviously until applicable mappers are implemented...
         }
     }
     if (ppu->cycle >= 341) {
@@ -606,7 +617,7 @@ uint8_t cpu_ppu_read(Ppu* ppu, uint16_t address, bool rd_only) {
             // Status
             case 0x0002:
                 data = (ppu->registers.status.reg & 0xE0) | (ppu->ppu_data_buffer & 0x1F);
-                ppu->registers.status.bits.vertical_blank = 0;
+                ppu->registers.status.vertical_blank = 0;
                 ppu->address_latch = 0;
                 break;
 
@@ -631,7 +642,7 @@ uint8_t cpu_ppu_read(Ppu* ppu, uint16_t address, bool rd_only) {
                 if (ppu->vram_addr.reg >= 0x3F00) {
                     data = ppu->ppu_data_buffer;
                 }
-                ppu->vram_addr.reg += ppu->registers.ctrl.bits.increment_mode ? 32 : 1;
+                ppu->vram_addr.reg += ppu->registers.ctrl.increment_mode ? 32 : 1;
                 break;
         }
     }
@@ -642,8 +653,8 @@ void cpu_ppu_write(Ppu* ppu, uint16_t address, uint8_t data) {
     switch (address) {
         case 0x0000: // Control
             ppu->registers.ctrl.reg = data;
-            ppu->tram_addr.bits.nametable_x = ppu->registers.ctrl.bits.nametable_x;
-            ppu->tram_addr.bits.nametable_y = ppu->registers.ctrl.bits.nametable_y;
+            ppu->tram_addr.nametable_x = ppu->registers.ctrl.nametable_x;
+            ppu->tram_addr.nametable_y = ppu->registers.ctrl.nametable_y;
             break;
         case 0x0001: // Mask
             ppu->registers.mask.reg = data;
@@ -659,12 +670,12 @@ void cpu_ppu_write(Ppu* ppu, uint16_t address, uint8_t data) {
         case 0x0005: // Scroll
             if (ppu->address_latch == 0) {
                 ppu->fine_x = data & 0x07;
-                ppu->tram_addr.bits.coarse_x = data >> 3;
+                ppu->tram_addr.coarse_x = data >> 3;
                 ppu->address_latch = 1;
             }
             else {
-                ppu->tram_addr.bits.fine_y = data & 0x07;
-                ppu->tram_addr.bits.coarse_y = data >> 3;
+                ppu->tram_addr.fine_y = data & 0x07;
+                ppu->tram_addr.coarse_y = data >> 3;
                 ppu->address_latch = 0;
             }
             break;
@@ -681,11 +692,10 @@ void cpu_ppu_write(Ppu* ppu, uint16_t address, uint8_t data) {
             break;
         case 0x0007: // PPU Data
             ppu_write(ppu, ppu->vram_addr.reg, data);
-            ppu->vram_addr.reg += ppu->registers.ctrl.bits.increment_mode ? 32 : 1;
+            ppu->vram_addr.reg += ppu->registers.ctrl.increment_mode ? 32 : 1;
             break;
     }
 }
-
 
 // Ability for PPU to read and write data
 uint8_t ppu_read(Ppu* ppu, uint16_t address) {

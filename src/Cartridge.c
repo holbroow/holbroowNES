@@ -1,3 +1,6 @@
+// Cartridge.c
+// Nintendo Entertainment System Cartridge Implementation
+// Will Holbrook - 20th December 2024
 #include "Cartridge.h"
 #include "Mapper.h"
 
@@ -77,13 +80,25 @@ Cartridge* init_cart(const char* filepath) {
 
     // Create mapper and load ROM into it depending on its Mapper ID
     // TODO: Implement further mapper IDs
-    cartridge->mapper = mapper_create(cartridge->n_prg_banks, cartridge->n_chr_banks);
     switch (cartridge->mapper_id) {
         case 0:
-            mapper_load(cartridge->mapper);
+            cartridge->mapper = mapper_create(cartridge->n_prg_banks, 
+                                              cartridge->n_chr_banks, 
+                                              NULL, 
+                                              NULL, 
+                                              NULL,
+                                              NULL, 
+                                              NULL, 
+                                              NULL, 
+                                              NULL);
+            mapper_load_0(cartridge->mapper);
+            printf("[CARTRIDGE] Mapper ID (%d) implemented\n", cartridge->mapper_id); 
             break;
+        case 1:
+            
+
         default:
-            printf("[CARTRIDGE] Mapper ID not implemented\n"); 
+            printf("[CARTRIDGE] Mapper ID (%d) not implemented\n", cartridge->mapper_id); 
             break;
     }
     
