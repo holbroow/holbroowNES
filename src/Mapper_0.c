@@ -11,6 +11,7 @@ bool mapper_cpu_write(Mapper *mapper, uint16_t address, uint32_t *mapped_addr);
 bool mapper_ppu_read(Mapper *mapper, uint16_t address, uint32_t *mapped_addr);
 bool mapper_ppu_write(Mapper *mapper, uint16_t address, uint32_t *mapped_addr);
 
+// Init Mapper 0
 void mapper_load_0(Mapper *mapper) {
     mapper->mapper_cpu_read = mapper_cpu_read;
     mapper->mapper_cpu_write = mapper_cpu_write;
@@ -46,7 +47,12 @@ bool mapper_ppu_read(Mapper *mapper, uint16_t address, uint32_t *mapped_addr) {
 }
 
 bool mapper_ppu_write(Mapper *mapper, uint16_t address, uint32_t *mapped_addr) {
-    // Not implemented :0/
+    if (address >= 0x0000 && address <= 0x1FFF) {
+		if (mapper->chr_banks == 0) {
+			*mapped_addr = address;
+			return true;
+		}
+	}
 
     return false;
 }

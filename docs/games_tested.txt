@@ -1,7 +1,12 @@
 nestest.nes:    Working fully (official opcodes only, obviously)
 blfight:        Working fully with a slight sprite graphical glitch
 galaga:         Working but with some graphical glitches
+
+pinball:        Menu shows, selector sprite doesnt show, but can blindly select and play game
+tetris:         Menu shows, fully selectable with slight graphical glitches, when game runs however, unplayable.
 dkong:          Menu shows, non selectable, auto-runs and is ~controllable, mario renders oddly however...
 smbros:         Menu shows, non selectable
 bomberman:      Menu shows, non selectable
-tetris.nes:     
+
+metroid:        Doesnt work, probably because of my lack of an Expansion ROM implementation for my emulator.
+prowrestling:   Doesnt work, not sure why.

@@ -20,9 +20,9 @@
 #include <SDL2/SDL.h>
 
 // Define display parameters
-#define NES_WIDTH 256   // Screen pixel 'Width' of NES res
-#define NES_HEIGHT 240  // Screen pixel 'Height' of NES res
-#define SCALE 3         // Scale factor for improved visibility
+#define NES_WIDTH 256           // Screen pixel 'Width' of NES res
+#define NES_HEIGHT (240 - 16)   // Screen pixel 'Height' of NES res (240 - 16 to retain 224 height (hidden CRT scanlines effect)) (we effectively cut off the top and bottom 8 scanlines)
+#define SCALE 3                 // Scale factor for improved visibility
 
 const char* file_path;
 Cartridge* cart;
@@ -80,8 +80,7 @@ void init_display() {
     renderer = SDL_CreateRenderer(SDL_CreateWindow("holbroowNES test", 50, 50, NES_WIDTH * SCALE, NES_HEIGHT * SCALE, SDL_WINDOW_SHOWN),
                                   -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
     texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA8888,
-                                SDL_TEXTUREACCESS_STREAMING, NES_WIDTH, NES_HEIGHT);
-
+                                SDL_TEXTUREACCESS_STREAMING, NES_WIDTH, (NES_HEIGHT));
     bool run_debug = false;
 }
 
@@ -160,9 +159,9 @@ int main(int argc, char* argv[]) {
     cpu->running = true;
     printf("[CPU] CPU is now running!\n\n");
 
-    const uint32_t frame_duration_ms = 16;              // Store our target of ~60 FPS (16ms per frame)
-    uint32_t frame_start_time_ms = SDL_GetTicks();      // Store the start time for initial frame
-    const Uint8 *state = SDL_GetKeyboardState(NULL);    // Configure a value to store keyboard's 'state' (what is/isn't pressed)
+    const uint32_t frame_duration_ms    = 16;                           // Store our target of ~60 FPS (16ms per frame)
+    uint32_t frame_start_time_ms        = SDL_GetTicks();               // Store the start time for initial frame
+    const Uint8 *state                  = SDL_GetKeyboardState(NULL);   // Configure a value to store keyboard's 'state' (what is/isn't pressed)
 
     // Run the NES!
     while (cpu->running) {
@@ -190,7 +189,7 @@ int main(int argc, char* argv[]) {
             ppu->frame_done = false;
 
             // Render frame to the SDL window/'display'
-            SDL_UpdateTexture(texture, NULL, ppu->framebuffer, NES_WIDTH * sizeof(uint32_t));
+            SDL_UpdateTexture(texture, NULL, ppu->framebuffer + 2048, NES_WIDTH * sizeof(uint32_t)); // we skip 2048 bytes to skip the first 8 scanlines (224 height instead of 240 - CRT resolution effect)
             SDL_RenderCopy(renderer, texture, NULL, NULL);
             SDL_RenderPresent(renderer);
             // Increment the count (debug purposes only, otherwise serves no functional purpose)

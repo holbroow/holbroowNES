@@ -49,3 +49,7 @@ Mapper *mapper_create(
 );
 
 void mapper_load_0(Mapper *mapper);
+
+void mapper_load_1(Mapper *mapper);
+
+void mapper_load_2(Mapper *mapper);

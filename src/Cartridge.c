@@ -80,9 +80,7 @@ Cartridge* init_cart(const char* filepath) {
 
     // Create mapper and load ROM into it depending on its Mapper ID
     // TODO: Implement further mapper IDs
-    switch (cartridge->mapper_id) {
-        case 0:
-            cartridge->mapper = mapper_create(cartridge->n_prg_banks, 
+    cartridge->mapper = mapper_create(cartridge->n_prg_banks, 
                                               cartridge->n_chr_banks, 
                                               NULL, 
                                               NULL, 
@@ -91,14 +89,21 @@ Cartridge* init_cart(const char* filepath) {
                                               NULL, 
                                               NULL, 
                                               NULL);
+    switch (cartridge->mapper_id) {
+        case 0:
             mapper_load_0(cartridge->mapper);
             printf("[CARTRIDGE] Mapper ID (%d) implemented\n", cartridge->mapper_id); 
             break;
         case 1:
-            
-
+            mapper_load_1(cartridge->mapper);
+            printf("[CARTRIDGE] Mapper ID (%d) implemented\n", cartridge->mapper_id); 
+            break;
+        case 2:
+            mapper_load_2(cartridge->mapper);
+            printf("[CARTRIDGE] Mapper ID (%d) implemented\n", cartridge->mapper_id); 
+            break;
         default:
-            printf("[CARTRIDGE] Mapper ID (%d) not implemented\n", cartridge->mapper_id); 
+            printf("[CARTRIDGE] Mapper ID (%d) not implemented\n", cartridge->mapper_id);
             break;
     }
     
