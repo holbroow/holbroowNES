@@ -1,10 +1,11 @@
 nestest.nes:    Working fully (official opcodes only, obviously)
+pacman:         Working but with the top-left quadrant of the player sprite missing, otherwise game plays perfectly.
 blfight:        Working fully with a slight sprite graphical glitch
 galaga:         Working but with some graphical glitches
 
 pinball:        Menu shows, selector sprite doesnt show, but can blindly select and play game
-tetris:         Menu shows, fully selectable with slight graphical glitches, when game runs however, unplayable.
 dkong:          Menu shows, non selectable, auto-runs and is ~controllable, mario renders oddly however...
+tetris:         Menu shows, fully selectable with slight graphical glitches, when game runs however, unplayable.
 smbros:         Menu shows, non selectable
 bomberman:      Menu shows, non selectable
 

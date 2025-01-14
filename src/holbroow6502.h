@@ -42,7 +42,7 @@ typedef struct Cpu {
     // Cycles occured since reset
     int cycle_count;
 
-    // Cycles remaining until 'finished;
+    // Cycles remaining until 'finished'
     int cycles_left;
 } Cpu;
 

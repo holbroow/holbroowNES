@@ -85,7 +85,18 @@ void init_display() {
 }
 
 // One NES 'clock'
-void nes_clock() {
+void nes_clock(const uint8_t* state) {
+    // Handle any key presses (controller activity)
+    bus->controller[0] = 0x00;                                          // Initiate Controller 0 (1st controller)
+    if (state[SDL_SCANCODE_Z])          bus->controller[0] |= 0x80;     // A        (Key Z)
+    if (state[SDL_SCANCODE_X])          bus->controller[0] |= 0x40;     // B        (Key X)
+    if (state[SDL_SCANCODE_TAB])        bus->controller[0] |= 0x20;     // Select   (Key SELECT)
+    if (state[SDL_SCANCODE_RETURN])     bus->controller[0] |= 0x10;     // Start    (Key ENTER/RETURN)
+    if (state[SDL_SCANCODE_UP])         bus->controller[0] |= 0x08;     // Up       (Key UP ARR)
+    if (state[SDL_SCANCODE_DOWN])       bus->controller[0] |= 0x04;     // Down     (Key DOWN ARR)
+    if (state[SDL_SCANCODE_LEFT])       bus->controller[0] |= 0x02;     // Left     (Key LEFT ARR)
+    if (state[SDL_SCANCODE_RIGHT])      bus->controller[0] |= 0x01;     // Right    (Key RIGHT ARR)
+    
     // Do one PPU 'clock'
     ppu_clock(ppu);
 
@@ -140,16 +151,16 @@ int main(int argc, char* argv[]) {
     // Initialise the 'NES' with a Cartridge, Bus, PPU, and CPU
     init_nes();
 
-    // Debug to check if cart->prg_rom (and therefore redundantly ppu->cart->prg_rom) is of substance
-    printf("\n[MANAGER] Program on cartridge:\n");
-    for (size_t i = 0; i < cart->prg_memory->capacity; i++) {
-        printf("%02X ", cart->prg_memory->items[i]);
+    // // Debug to check if cart->prg_rom (and therefore redundantly ppu->cart->prg_rom) is of substance
+    // printf("\n[MANAGER] Program on cartridge:\n");
+    // for (size_t i = 0; i < cart->prg_memory->capacity; i++) {
+    //     printf("%02X ", cart->prg_memory->items[i]);
 
-        // Print 16 bytes per line
-        if ((i + 1) % 16 == 0) {
-            printf("\n");
-        }
-    }
+    //     // Print 16 bytes per line
+    //     if ((i + 1) % 16 == 0) {
+    //         printf("\n");
+    //     }
+    // }
     printf("\n");
 
     // Initialise Display
@@ -158,30 +169,23 @@ int main(int argc, char* argv[]) {
     // Run the NES!!!
     cpu->running = true;
     printf("[CPU] CPU is now running!\n\n");
-
+    
+    // Frame / Keyboard Variables
     const uint32_t frame_duration_ms    = 16;                           // Store our target of ~60 FPS (16ms per frame)
     uint32_t frame_start_time_ms        = SDL_GetTicks();               // Store the start time for initial frame
-    const Uint8 *state                  = SDL_GetKeyboardState(NULL);   // Configure a value to store keyboard's 'state' (what is/isn't pressed)
+    const uint8_t *state                = SDL_GetKeyboardState(NULL);   // Configure a value to store keyboard's 'state' (what is/isn't pressed)
 
     // Run the NES!
     while (cpu->running) {
-        // Handle any key presses (controller activity)
-        bus->controller[0] = 0x00;                                          // Initiate Controller 0 (1st controller)
-        if (state[SDL_SCANCODE_Z])          bus->controller[0] |= 0x80;     // A        (Key Z)
-        if (state[SDL_SCANCODE_X])          bus->controller[0] |= 0x40;     // B        (Key X)
-        if (state[SDL_SCANCODE_TAB])        bus->controller[0] |= 0x20;     // Select   (Key SELECT)
-        if (state[SDL_SCANCODE_RETURN])     bus->controller[0] |= 0x10;     // Start    (Key ENTER/RETURN)
-        if (state[SDL_SCANCODE_UP])         bus->controller[0] |= 0x08;     // Up       (Key UP ARR)
-        if (state[SDL_SCANCODE_DOWN])       bus->controller[0] |= 0x04;     // Down     (Key DOWN ARR)
-        if (state[SDL_SCANCODE_LEFT])       bus->controller[0] |= 0x02;     // Left     (Key LEFT ARR)
-        if (state[SDL_SCANCODE_RIGHT])      bus->controller[0] |= 0x01;     // Right    (Key RIGHT ARR)
-        // if (state[SDL_SCANCODE_R]) {                                        // RESET    (Key R)
-        //     cpu_reset(cpu, bus);
-        //     nes_cycles_passed = 0;
-        // }
 
         // Do 1 NES 'clock'
-        nes_clock();
+        /* Within 'nes_clock':
+            Controller state is checked (KB input) (We pass in the Keyboard's state, as visible)
+            The PPU is clocked thrice
+            The CPU is clocked once
+            DMA and NMI is partially handled here as well
+        */
+        nes_clock(state);
 
         // If the PPU completes the frame rendering process...
         if (ppu->frame_done) {

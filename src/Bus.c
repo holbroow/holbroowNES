@@ -58,6 +58,7 @@ void bus_write(Bus* bus, uint16_t address, uint8_t data) {
         printf("[BUS] Expansion ROM not implemented.\n");
 
     } else {
+        // Write to undefined address, ignore
         //printf("[BUS] Detected write to undefined address on bus: 0x%04X\n", address);
     }
 }
@@ -75,7 +76,7 @@ uint8_t bus_read(Bus* bus, uint16_t address) {
 
     } else if (address >= 0x2000 && address <= 0x3FFF) {
         // PPU Registers (Mirrored every 8 bytes)
-        return cpu_ppu_read(bus->ppu, address & 0x0007, false);
+        return cpu_ppu_read(bus->ppu, address & 0x0007);
 
     } else if (address >= 0x4016 && address <= 0x4017) {
         // Controller(s)
@@ -87,7 +88,8 @@ uint8_t bus_read(Bus* bus, uint16_t address) {
         printf("[BUS] Expansion ROM not implemented.\n");
 
     } else {
-        printf("[BUS] Detected attempted read from undefined address on bus: 0x%04X\n", address);
+        // Read from undefined address, ignore
+        //printf("[BUS] Detected attempted read from undefined address on bus: 0x%04X\n", address);
     }
 
     // Return any fetched data, whether it be important or not, if not already returned.
