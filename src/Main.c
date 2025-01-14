@@ -32,6 +32,7 @@ Cpu* cpu;
 SDL_Texture* texture;
 SDL_Renderer* renderer;
 int nes_cycles_passed = 0;
+bool nes_running = true;
 bool cpu_running;
 bool run_debug = false;
 int frame_num = 0;
@@ -84,19 +85,22 @@ void init_display() {
     bool run_debug = false;
 }
 
-// One NES 'clock'
-void nes_clock(const uint8_t* state) {
-    // Handle any key presses (controller activity)
-    bus->controller[0] = 0x00;                                          // Initiate Controller 0 (1st controller)
-    if (state[SDL_SCANCODE_Z])          bus->controller[0] |= 0x80;     // A        (Key Z)
-    if (state[SDL_SCANCODE_X])          bus->controller[0] |= 0x40;     // B        (Key X)
-    if (state[SDL_SCANCODE_TAB])        bus->controller[0] |= 0x20;     // Select   (Key SELECT)
-    if (state[SDL_SCANCODE_RETURN])     bus->controller[0] |= 0x10;     // Start    (Key ENTER/RETURN)
-    if (state[SDL_SCANCODE_UP])         bus->controller[0] |= 0x08;     // Up       (Key UP ARR)
-    if (state[SDL_SCANCODE_DOWN])       bus->controller[0] |= 0x04;     // Down     (Key DOWN ARR)
-    if (state[SDL_SCANCODE_LEFT])       bus->controller[0] |= 0x02;     // Left     (Key LEFT ARR)
-    if (state[SDL_SCANCODE_RIGHT])      bus->controller[0] |= 0x01;     // Right    (Key RIGHT ARR)
+// Reset the NES system (Reset Button simulation)
+void reset_nes(Cpu* cpu, Bus* bus, Ppu* ppu) {
+    // Reset CPU
+    cpu_reset(cpu, bus);
+    cpu->cycle_count = 0;
+
+    // Reset (not really) PPU
+    memset(ppu->framebuffer, 0, sizeof(ppu->framebuffer));
+    ppu->frames_completed = 0;
     
+    // NES will now run from 'cycle' 0
+    nes_cycles_passed = 0;
+}
+
+// One NES 'clock'
+void nes_clock() {
     // Do one PPU 'clock'
     ppu_clock(ppu);
 
@@ -176,7 +180,24 @@ int main(int argc, char* argv[]) {
     const uint8_t *state                = SDL_GetKeyboardState(NULL);   // Configure a value to store keyboard's 'state' (what is/isn't pressed)
 
     // Run the NES!
-    while (cpu->running) {
+    while (nes_running) {
+        // Handle any key presses (controller activity)
+        bus->controller[0] = 0x00;                                          // Initiate Controller 0 (1st controller)
+
+        if (state[SDL_SCANCODE_P])          nes_running = false;            // POWER    (Key P) This only really powers off :0)
+        if (state[SDL_SCANCODE_R])          reset_nes(cpu, bus, ppu);       // RESET    (Key R)
+
+        if (state[SDL_SCANCODE_Z])          bus->controller[0] |= 0x80;     // A        (Key Z)
+        if (state[SDL_SCANCODE_X])          bus->controller[0] |= 0x40;     // B        (Key X)
+
+        if (state[SDL_SCANCODE_TAB])        bus->controller[0] |= 0x20;     // Select   (Key SELECT)
+        if (state[SDL_SCANCODE_RETURN])     bus->controller[0] |= 0x10;     // Start    (Key ENTER/RETURN)
+
+        if (state[SDL_SCANCODE_UP])         bus->controller[0] |= 0x08;     // Up       (Key UP ARR)
+        if (state[SDL_SCANCODE_DOWN])       bus->controller[0] |= 0x04;     // Down     (Key DOWN ARR)
+        if (state[SDL_SCANCODE_LEFT])       bus->controller[0] |= 0x02;     // Left     (Key LEFT ARR)
+        if (state[SDL_SCANCODE_RIGHT])      bus->controller[0] |= 0x01;     // Right    (Key RIGHT ARR)
+
 
         // Do 1 NES 'clock'
         /* Within 'nes_clock':
@@ -185,7 +206,8 @@ int main(int argc, char* argv[]) {
             The CPU is clocked once
             DMA and NMI is partially handled here as well
         */
-        nes_clock(state);
+        nes_clock();
+
 
         // If the PPU completes the frame rendering process...
         if (ppu->frame_done) {
