@@ -22,10 +22,10 @@
 
 // Define window params
 // Menu IDs
-#define ID_FILE_LOADROM 9003
-#define ID_FILE_EXIT 9001
-#define ID_HELP_HELP 9004
-#define ID_HELP_ABOUT 9002
+#define ID_FILE_LOADROM 9001
+#define ID_FILE_EXIT 9002
+#define ID_HELP_HELP 9003
+#define ID_HELP_ABOUT 9004
 
 // Define display params
 #define NES_WIDTH 256           // Screen pixel 'Width' of NES res
@@ -57,104 +57,6 @@ int delay_time;
 
 const uint8_t *state;
 
-
-// Callback for handling Windows messages
-LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
-    switch (uMsg) {
-        case WM_COMMAND:
-            switch (LOWORD(wParam)) {
-                case ID_FILE_LOADROM:
-                {
-                    // Buffer to store the file path
-                    char filePath[MAX_PATH] = {0};
-
-                    // Open file dialog
-                    OPENFILENAME ofn = {0};
-                    ofn.lStructSize = sizeof(OPENFILENAME);
-                    ofn.hwndOwner = hwnd;
-                    ofn.lpstrFilter = "ROM Files\0*.rom;*.bin;*.nes\0All Files\0*.*\0"; // Filter for ROM file types
-                    ofn.lpstrFile = filePath;
-                    ofn.nMaxFile = MAX_PATH;
-                    ofn.Flags = OFN_FILEMUSTEXIST | OFN_PATHMUSTEXIST;
-                    ofn.lpstrTitle = "Select a ROM File";
-
-                    if (GetOpenFileName(&ofn)) {
-                        // Free the previous file_path if it was already set
-                        if (file_path) {
-                            free((void*)file_path);  // Cast to void* to free a const char*
-                        }
-
-                        // Allocate memory for the new path and copy it
-                        file_path = (char*)malloc(strlen(filePath) + 1);
-                        if (file_path) {
-                            strcpy((char*)file_path, filePath);
-                            printf("Loaded ROM: %s\n", file_path);
-                        } else {
-                            MessageBox(hwnd, "Failed to allocate memory for file path.", "Error", MB_OK | MB_ICONERROR);
-                        }
-                    } else {
-                        MessageBox(hwnd, "No file selected.", "Load ROM", MB_OK | MB_ICONWARNING);
-                    }
-                    nes_running = true;
-                    break;
-                }
-                case ID_FILE_EXIT:
-                    PostQuitMessage(0);
-                    break;
-
-                case ID_HELP_HELP:
-                    MessageBox(hwnd, "Help", "Help", MB_OK | MB_ICONINFORMATION);
-                    break;
-                case ID_HELP_ABOUT:
-                    MessageBox(hwnd, "About", "About", MB_OK | MB_ICONINFORMATION);
-                    break;
-            }
-            break;
-
-        case WM_DESTROY:
-            PostQuitMessage(0);
-            break;
-
-        default:
-            return DefWindowProc(hwnd, uMsg, wParam, lParam);
-    }
-    return 0;
-}
-
-//Initialise 'holbroowNES' window
-int init_window() {
-    WNDCLASS wc = {0};
-    wc.lpfnWndProc = WindowProc;
-    wc.hInstance = GetModuleHandle(NULL);
-    wc.lpszClassName = "SDLWindowClass";
-
-    RegisterClass(&wc);
-
-    hwnd = CreateWindowEx(
-        0, "SDLWindowClass", "holbroowNES",
-        WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT,
-        NES_WIDTH * SCALE, ((NES_HEIGHT * SCALE) + GetSystemMetrics(SM_CYMENU)), NULL, NULL, GetModuleHandle(NULL), NULL);
-
-    if (!hwnd) {
-        MessageBox(NULL, "Failed to create window", "Error", MB_OK | MB_ICONERROR);
-        return -1;
-    }
-
-    // Create menu bar
-    HMENU hMenu = CreateMenu();
-    HMENU hFileMenu = CreateMenu();
-    HMENU hHelpMenu = CreateMenu();
-
-    AppendMenu(hMenu, MF_POPUP, (UINT_PTR)hFileMenu, "File");
-    AppendMenu(hFileMenu, MF_STRING, ID_FILE_LOADROM, "Load ROM");
-    AppendMenu(hFileMenu, MF_STRING, ID_FILE_EXIT, "Quit");
-
-    AppendMenu(hMenu, MF_POPUP, (UINT_PTR)hHelpMenu, "Help");
-    AppendMenu(hHelpMenu, MF_STRING, ID_HELP_HELP, "Help");
-    AppendMenu(hHelpMenu, MF_STRING, ID_HELP_ABOUT, "About");
-
-    SetMenu(hwnd, hMenu);
-}
 
 // Initialise the NES as a system (peripherals)
 void init_nes() {
@@ -265,29 +167,134 @@ void nes_clock() {
     nes_cycles_passed++;
 }
 
+// Callback for handling Windows messages
+LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
+    switch (uMsg) {
+        case WM_COMMAND:
+            switch (LOWORD(wParam)) {
+                case ID_FILE_LOADROM:
+                {
+                    // Buffer to store the file path
+                    char filePath[MAX_PATH] = {0};
+
+                    // Open file dialog
+                    OPENFILENAME ofn = {0};
+                    ofn.lStructSize = sizeof(OPENFILENAME);
+                    ofn.hwndOwner = hwnd;
+                    ofn.lpstrFilter = "ROM Files\0*.rom;*.bin;*.nes\0All Files\0*.*\0"; // Filter for ROM file types
+                    ofn.lpstrFile = filePath;
+                    ofn.nMaxFile = MAX_PATH;
+                    ofn.Flags = OFN_FILEMUSTEXIST | OFN_PATHMUSTEXIST;
+                    ofn.lpstrTitle = "Select a ROM File";
+
+                    if (GetOpenFileName(&ofn)) {
+                        // Free the previous file_path if it was already set
+                        if (file_path) {
+                            free((void*)file_path);  // Cast to void* to free a const char*
+                        }
+
+                        // Allocate memory for the new path and copy it
+                        file_path = (char*)malloc(strlen(filePath) + 1);
+                        if (file_path) {
+                            strcpy((char*)file_path, filePath);
+                        } else {
+                            MessageBox(hwnd, "Failed to allocate memory for file path.", "Error", MB_OK | MB_ICONERROR);
+                        }
+                    } else {
+                        MessageBox(hwnd, "No file selected.", "Load ROM", MB_OK | MB_ICONWARNING);
+                    }
+
+                    if (nes_running) {
+                        // Reset and assign cartridge
+                        cart = init_cart(file_path);
+                        bus->cart = cart;
+                        ppu->cart = cart;
+                        // Reset the NES
+                        reset_nes(cpu, bus, ppu);
+                    } else {
+                        nes_running = true;
+                    }
+
+                    break;
+                }
+                case ID_FILE_EXIT:
+                    PostQuitMessage(0);
+                    break;
+
+                case ID_HELP_HELP:
+                    MessageBox(hwnd, "Help", "Help", MB_OK | MB_ICONINFORMATION);
+                    break;
+                case ID_HELP_ABOUT:
+                    MessageBox(hwnd, "About", "About", MB_OK | MB_ICONINFORMATION);
+                    break;
+            }
+            break;
+
+        case WM_DESTROY:
+            PostQuitMessage(0);
+            break;
+
+        default:
+            return DefWindowProc(hwnd, uMsg, wParam, lParam);
+    }
+    return 0;
+}
+
+//Initialise 'holbroowNES' window
+int init_window() {
+    WNDCLASS wc = {0};
+    wc.lpfnWndProc = WindowProc;
+    wc.hInstance = GetModuleHandle(NULL);
+    wc.lpszClassName = "SDLWindowClass";
+
+    RegisterClass(&wc);
+
+    hwnd = CreateWindowEx(
+        0, "SDLWindowClass", "holbroowNES",
+        WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT,
+        NES_WIDTH * SCALE, ((NES_HEIGHT * SCALE) + GetSystemMetrics(SM_CYMENU)), NULL, NULL, GetModuleHandle(NULL), NULL);
+
+    if (!hwnd) {
+        MessageBox(NULL, "Failed to create window", "Error", MB_OK | MB_ICONERROR);
+        exit(-1);
+    }
+
+    // Create menu bar
+    HMENU hMenu = CreateMenu();
+    HMENU hFileMenu = CreateMenu();
+    HMENU hHelpMenu = CreateMenu();
+
+    AppendMenu(hMenu, MF_POPUP, (UINT_PTR)hFileMenu, "File");
+    AppendMenu(hFileMenu, MF_STRING, ID_FILE_LOADROM, "Load ROM");
+    AppendMenu(hFileMenu, MF_STRING, ID_FILE_EXIT, "Quit");
+
+    AppendMenu(hMenu, MF_POPUP, (UINT_PTR)hHelpMenu, "Help");
+    AppendMenu(hHelpMenu, MF_STRING, ID_HELP_HELP, "Help");
+    AppendMenu(hHelpMenu, MF_STRING, ID_HELP_ABOUT, "About");
+
+    SetMenu(hwnd, hMenu);
+}
 
 
 // Main function
 int main(int argc, char* argv[]) {
-    // Take in filename/filepath to .nes game/program (local file)
-    // if (argc < 2) {
-    //     fprintf(stderr, "[MANAGER] Usage: %s <path_to_nes_file>\n", argv[0]);
-    //     return 1;
-    // }
-    // file_path = argv[1];
-
+    // Allow a parameter (drag and drop to the .exe / CLI arg) if given
+    if(argv[1]) {
+        file_path = argv[1];
+    }
 
     // Initialise 'holbroowNES' window (If error occurs, exit program)
-    // if (init_window() == -1) return -1;
     init_window();
-
-    // // Initialise the 'NES' with a Cartridge, Bus, PPU, and CPU
-    // init_nes();
 
     // Initialise Display
     init_sdl_display();
 
+    // If we tookm a file path previously from an argument, we can start the nes instantly
+    if (file_path) {
+        nes_running = true;
+    }
 
+    // This will happen if there is no file_path (provided .nes ROM)
     while (!nes_running) {
         // Handle Windows messages
         while (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE)) {
@@ -297,10 +304,8 @@ int main(int argc, char* argv[]) {
             TranslateMessage(&msg);
             DispatchMessage(&msg);
         }
-
     }
 
-    printf("%s\n", file_path);
     // Initialise the 'NES' with a Cartridge, Bus, PPU, and CPU
     init_nes();
 
@@ -309,6 +314,7 @@ int main(int argc, char* argv[]) {
     frame_start_time_ms     = SDL_GetTicks();               // Store the start time for initial frame
     state                   = SDL_GetKeyboardState(NULL);   // Configure a value to store keyboard's 'state' (what is/isn't pressed)
 
+    // Indefinitely... Run the NES!
     while (nes_running) {
         // Handle Windows messages
         if (nes_cycles_passed % 100 == 0) {
@@ -387,7 +393,7 @@ int main(int argc, char* argv[]) {
 
     // Clean up - Free NES components + SDL/Window from memory
     if (file_path) {
-        free((void*)file_path); // Free the allocated memory
+        free((void*)file_path);
     }
     free(cpu);
     free(ppu);
