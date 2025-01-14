@@ -17,20 +17,34 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include <windows.h>
+#include <commdlg.h> // For GetOpenFileName
 #include <SDL2/SDL.h>
 
-// Define display parameters
+// Define window params
+// Menu IDs
+#define ID_FILE_LOADROM 9003
+#define ID_FILE_EXIT 9001
+#define ID_HELP_HELP 9004
+#define ID_HELP_ABOUT 9002
+
+// Define display params
 #define NES_WIDTH 256           // Screen pixel 'Width' of NES res
 #define NES_HEIGHT (240 - 16)   // Screen pixel 'Height' of NES res (240 - 16 to retain 224 height (hidden CRT scanlines effect)) (we effectively cut off the top and bottom 8 scanlines)
 #define SCALE 3                 // Scale factor for improved visibility
 
 const char* file_path;
+
 Cartridge* cart;
 Bus* bus;
 Ppu* ppu;
 Cpu* cpu;
+
+HWND hwnd;
+MSG msg;
+SDL_Window* sdl_window;
 SDL_Texture* texture;
 SDL_Renderer* renderer;
+
 int nes_cycles_passed = 0;
 bool nes_running;
 bool cpu_running;
@@ -38,8 +52,109 @@ bool run_debug = false;
 int frame_num = 0;
 uint32_t frame_duration_ms;
 uint32_t frame_start_time_ms;
+uint32_t frame_end_time_ms;
+int delay_time;
+
 const uint8_t *state;
 
+
+// Callback for handling Windows messages
+LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
+    switch (uMsg) {
+        case WM_COMMAND:
+            switch (LOWORD(wParam)) {
+                case ID_FILE_LOADROM:
+                {
+                    // Buffer to store the file path
+                    char filePath[MAX_PATH] = {0};
+
+                    // Open file dialog
+                    OPENFILENAME ofn = {0};
+                    ofn.lStructSize = sizeof(OPENFILENAME);
+                    ofn.hwndOwner = hwnd;
+                    ofn.lpstrFilter = "ROM Files\0*.rom;*.bin;*.nes\0All Files\0*.*\0"; // Filter for ROM file types
+                    ofn.lpstrFile = filePath;
+                    ofn.nMaxFile = MAX_PATH;
+                    ofn.Flags = OFN_FILEMUSTEXIST | OFN_PATHMUSTEXIST;
+                    ofn.lpstrTitle = "Select a ROM File";
+
+                    if (GetOpenFileName(&ofn)) {
+                        // Free the previous file_path if it was already set
+                        if (file_path) {
+                            free((void*)file_path);  // Cast to void* to free a const char*
+                        }
+
+                        // Allocate memory for the new path and copy it
+                        file_path = (char*)malloc(strlen(filePath) + 1);
+                        if (file_path) {
+                            strcpy((char*)file_path, filePath);
+                            printf("Loaded ROM: %s\n", file_path);
+                        } else {
+                            MessageBox(hwnd, "Failed to allocate memory for file path.", "Error", MB_OK | MB_ICONERROR);
+                        }
+                    } else {
+                        MessageBox(hwnd, "No file selected.", "Load ROM", MB_OK | MB_ICONWARNING);
+                    }
+                    nes_running = true;
+                    break;
+                }
+                case ID_FILE_EXIT:
+                    PostQuitMessage(0);
+                    break;
+
+                case ID_HELP_HELP:
+                    MessageBox(hwnd, "Help", "Help", MB_OK | MB_ICONINFORMATION);
+                    break;
+                case ID_HELP_ABOUT:
+                    MessageBox(hwnd, "About", "About", MB_OK | MB_ICONINFORMATION);
+                    break;
+            }
+            break;
+
+        case WM_DESTROY:
+            PostQuitMessage(0);
+            break;
+
+        default:
+            return DefWindowProc(hwnd, uMsg, wParam, lParam);
+    }
+    return 0;
+}
+
+//Initialise 'holbroowNES' window
+int init_window() {
+    WNDCLASS wc = {0};
+    wc.lpfnWndProc = WindowProc;
+    wc.hInstance = GetModuleHandle(NULL);
+    wc.lpszClassName = "SDLWindowClass";
+
+    RegisterClass(&wc);
+
+    hwnd = CreateWindowEx(
+        0, "SDLWindowClass", "holbroowNES",
+        WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT,
+        NES_WIDTH * SCALE, ((NES_HEIGHT * SCALE) + GetSystemMetrics(SM_CYMENU)), NULL, NULL, GetModuleHandle(NULL), NULL);
+
+    if (!hwnd) {
+        MessageBox(NULL, "Failed to create window", "Error", MB_OK | MB_ICONERROR);
+        return -1;
+    }
+
+    // Create menu bar
+    HMENU hMenu = CreateMenu();
+    HMENU hFileMenu = CreateMenu();
+    HMENU hHelpMenu = CreateMenu();
+
+    AppendMenu(hMenu, MF_POPUP, (UINT_PTR)hFileMenu, "File");
+    AppendMenu(hFileMenu, MF_STRING, ID_FILE_LOADROM, "Load ROM");
+    AppendMenu(hFileMenu, MF_STRING, ID_FILE_EXIT, "Quit");
+
+    AppendMenu(hMenu, MF_POPUP, (UINT_PTR)hHelpMenu, "Help");
+    AppendMenu(hHelpMenu, MF_STRING, ID_HELP_HELP, "Help");
+    AppendMenu(hHelpMenu, MF_STRING, ID_HELP_ABOUT, "About");
+
+    SetMenu(hwnd, hMenu);
+}
 
 // Initialise the NES as a system (peripherals)
 void init_nes() {
@@ -78,13 +193,17 @@ void init_nes() {
 }
 
 // Initialise the SDL2-based display
-void init_display() {
+void init_sdl_display() {
     // Initialise Display
     SDL_Init(SDL_INIT_VIDEO);
-    renderer = SDL_CreateRenderer(SDL_CreateWindow("holbroowNES test", 50, 50, NES_WIDTH * SCALE, NES_HEIGHT * SCALE, SDL_WINDOW_SHOWN),
+    // renderer = SDL_CreateRenderer(SDL_CreateWindow("holbroowNES test", 50, 50, NES_WIDTH * SCALE, NES_HEIGHT * SCALE, SDL_WINDOW_SHOWN),
+    //                               -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
+    sdl_window = SDL_CreateWindowFrom((void*) hwnd);
+    renderer = SDL_CreateRenderer(sdl_window,
                                   -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
     texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA8888,
                                 SDL_TEXTUREACCESS_STREAMING, NES_WIDTH, (NES_HEIGHT));
+    ShowWindow(hwnd, SW_SHOW);
     bool run_debug = false;
 }
 
@@ -151,31 +270,57 @@ void nes_clock() {
 // Main function
 int main(int argc, char* argv[]) {
     // Take in filename/filepath to .nes game/program (local file)
-    if (argc < 2) {
-        fprintf(stderr, "[MANAGER] Usage: %s <path_to_nes_file>\n", argv[0]);
-        return 1;
+    // if (argc < 2) {
+    //     fprintf(stderr, "[MANAGER] Usage: %s <path_to_nes_file>\n", argv[0]);
+    //     return 1;
+    // }
+    // file_path = argv[1];
+
+
+    // Initialise 'holbroowNES' window (If error occurs, exit program)
+    // if (init_window() == -1) return -1;
+    init_window();
+
+    // // Initialise the 'NES' with a Cartridge, Bus, PPU, and CPU
+    // init_nes();
+
+    // Initialise Display
+    init_sdl_display();
+
+
+    while (!nes_running) {
+        // Handle Windows messages
+        while (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE)) {
+            if (msg.message == WM_QUIT) {
+                exit(0);
+            }
+            TranslateMessage(&msg);
+            DispatchMessage(&msg);
+        }
+
     }
-    file_path = argv[1];
 
-
+    printf("%s\n", file_path);
     // Initialise the 'NES' with a Cartridge, Bus, PPU, and CPU
     init_nes();
 
-    // Initialise Display
-    init_display();
-    
     // Frame / Keyboard Variables
     frame_duration_ms       = 16;                           // Store our target of ~60 FPS (16ms per frame)
     frame_start_time_ms     = SDL_GetTicks();               // Store the start time for initial frame
     state                   = SDL_GetKeyboardState(NULL);   // Configure a value to store keyboard's 'state' (what is/isn't pressed)
 
-
-    // Run the NES!!!
-    nes_running = true;
-    cpu->running = true;
-    printf("[MANAGER] NES is now running!\n\n");
-
     while (nes_running) {
+        // Handle Windows messages
+        if (nes_cycles_passed % 100 == 0) {
+            while (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE)) {
+                if (msg.message == WM_QUIT) {
+                    nes_running = false;
+                }
+                TranslateMessage(&msg);
+                DispatchMessage(&msg);
+            }
+        }
+
         // Handle any key presses (controller activity)
         bus->controller[0] = 0x00;                                          // Initiate Controller 0 (1st controller)
 
@@ -210,11 +355,10 @@ int main(int argc, char* argv[]) {
             ppu->frame_done = false;
 
             // Render frame to the SDL window/'display'
-            SDL_UpdateTexture(texture, NULL, ppu->framebuffer + 2048, NES_WIDTH * sizeof(uint32_t)); // we skip 2048 bytes to skip the first 8 scanlines (224 height instead of 240 - CRT resolution effect)
+            SDL_UpdateTexture(texture, NULL, ppu->framebuffer + 2048, NES_WIDTH * sizeof(uint32_t)); // we skip 2048 bytes to skip the first 8 scanlines, and consequently the last 8 scanlines (224 height instead of 240)
             SDL_RenderCopy(renderer, texture, NULL, NULL);
             SDL_RenderPresent(renderer);
-            // Increment the count (debug purposes only, otherwise serves no functional purpose)
-            frame_num++;
+            frame_num++;    // Increment the count (debug purposes only, otherwise serves no functional purpose)
 
             // Handle any SDL events
             for (SDL_Event event; SDL_PollEvent(&event);) {
@@ -224,7 +368,7 @@ int main(int argc, char* argv[]) {
             }
 
             // Attempt to time the frame to achieve ~60fps
-            uint32_t frame_end_time_ms = SDL_GetTicks();
+            frame_end_time_ms = SDL_GetTicks();
             int delay_time = frame_duration_ms - (int)(frame_end_time_ms - frame_start_time_ms);
             if (delay_time > 0) {
                 SDL_Delay((uint32_t)delay_time);
@@ -236,16 +380,23 @@ int main(int argc, char* argv[]) {
             }
 
             // Update the start time for the next frame
-            frame_start_time_ms = SDL_GetTicks(); // Reset frame timer
+            frame_start_time_ms = SDL_GetTicks();   // Reset frame timer
         }
     }
 
 
-    // Clean up - Free NES components from memory
+    // Clean up - Free NES components + SDL/Window from memory
+    if (file_path) {
+        free((void*)file_path); // Free the allocated memory
+    }
     free(cpu);
     free(ppu);
     free(bus);
     free(cart);
+    SDL_DestroyRenderer(renderer);
+    SDL_DestroyTexture(texture);
+    SDL_DestroyWindow(sdl_window);
+    SDL_Quit();
 
     // Bye bye!
     return 0;
