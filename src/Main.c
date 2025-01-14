@@ -32,10 +32,13 @@ Cpu* cpu;
 SDL_Texture* texture;
 SDL_Renderer* renderer;
 int nes_cycles_passed = 0;
-bool nes_running = true;
+bool nes_running;
 bool cpu_running;
 bool run_debug = false;
 int frame_num = 0;
+uint32_t frame_duration_ms;
+uint32_t frame_start_time_ms;
+const uint8_t *state;
 
 
 // Initialise the NES as a system (peripherals)
@@ -71,7 +74,7 @@ void init_nes() {
     uint16_t reset_high = bus_read(bus, 0xFFFD);
     uint16_t reset_vector = (reset_high << 8) | reset_low;
     cpu->PC = reset_vector;   // Normally set to reset_vector value unless modified for a test case etc...
-    printf("[MANAGER] CPU PC set to reset vector 0x%04X\n", cpu->PC);
+    printf("[MANAGER] CPU PC set to reset vector 0x%04X\n\n", cpu->PC);
 }
 
 // Initialise the SDL2-based display
@@ -143,6 +146,8 @@ void nes_clock() {
     nes_cycles_passed++;
 }
 
+
+
 // Main function
 int main(int argc, char* argv[]) {
     // Take in filename/filepath to .nes game/program (local file)
@@ -152,34 +157,24 @@ int main(int argc, char* argv[]) {
     }
     file_path = argv[1];
 
+
     // Initialise the 'NES' with a Cartridge, Bus, PPU, and CPU
     init_nes();
 
-    // // Debug to check if cart->prg_rom (and therefore redundantly ppu->cart->prg_rom) is of substance
-    // printf("\n[MANAGER] Program on cartridge:\n");
-    // for (size_t i = 0; i < cart->prg_memory->capacity; i++) {
-    //     printf("%02X ", cart->prg_memory->items[i]);
-
-    //     // Print 16 bytes per line
-    //     if ((i + 1) % 16 == 0) {
-    //         printf("\n");
-    //     }
-    // }
-    printf("\n");
-
     // Initialise Display
     init_display();
-
-    // Run the NES!!!
-    cpu->running = true;
-    printf("[CPU] CPU is now running!\n\n");
     
     // Frame / Keyboard Variables
-    const uint32_t frame_duration_ms    = 16;                           // Store our target of ~60 FPS (16ms per frame)
-    uint32_t frame_start_time_ms        = SDL_GetTicks();               // Store the start time for initial frame
-    const uint8_t *state                = SDL_GetKeyboardState(NULL);   // Configure a value to store keyboard's 'state' (what is/isn't pressed)
+    frame_duration_ms       = 16;                           // Store our target of ~60 FPS (16ms per frame)
+    frame_start_time_ms     = SDL_GetTicks();               // Store the start time for initial frame
+    state                   = SDL_GetKeyboardState(NULL);   // Configure a value to store keyboard's 'state' (what is/isn't pressed)
 
-    // Run the NES!
+
+    // Run the NES!!!
+    nes_running = true;
+    cpu->running = true;
+    printf("[MANAGER] NES is now running!\n\n");
+
     while (nes_running) {
         // Handle any key presses (controller activity)
         bus->controller[0] = 0x00;                                          // Initiate Controller 0 (1st controller)
@@ -244,6 +239,7 @@ int main(int argc, char* argv[]) {
             frame_start_time_ms = SDL_GetTicks(); // Reset frame timer
         }
     }
+
 
     // Clean up - Free NES components from memory
     free(cpu);
