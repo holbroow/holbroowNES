@@ -62,6 +62,7 @@
     "stdio.h": "c",
     "mapper.h": "c",
     "stdlib.h": "c",
-    "ppu.h": "c"
+    "ppu.h": "c",
+    "ctype.h": "c"
   }
 }

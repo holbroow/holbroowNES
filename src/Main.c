@@ -26,11 +26,13 @@
 #define ID_FILE_EXIT 9002
 #define ID_HELP_HELP 9003
 #define ID_HELP_ABOUT 9004
+#define ID_CONTROL_RESET 9005
+#define ID_CONTROL_POWER 9006
 
 // Define display params
 #define NES_WIDTH 256           // Screen pixel 'Width' of NES res
 #define NES_HEIGHT (240 - 16)   // Screen pixel 'Height' of NES res (240 - 16 to retain 224 height (hidden CRT scanlines effect)) (we effectively cut off the top and bottom 8 scanlines)
-#define SCALE 3                 // Scale factor for improved visibility
+#define SCALE 4                 // Scale factor for improved visibility
 
 const char* file_path;
 
@@ -57,6 +59,20 @@ int delay_time;
 
 const uint8_t *state;
 
+void cleanup() {
+    // Clean up - Free NES components + SDL/Window from memory
+    if (file_path) {
+        free((void*)file_path);
+    }
+    free(cpu);
+    free(ppu);
+    free(bus);
+    free(cart);
+    SDL_DestroyRenderer(renderer);
+    SDL_DestroyTexture(texture);
+    SDL_DestroyWindow(sdl_window);
+    SDL_Quit();
+}
 
 // Initialise the NES as a system (peripherals)
 void init_nes() {
@@ -174,6 +190,10 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
             switch (LOWORD(wParam)) {
                 case ID_FILE_LOADROM:
                 {
+                    // Track whether a new cartridge was selected, 
+                    //  so as to not reset the current nes program if nothing was selected
+                    bool cart_changed = false;
+
                     // Buffer to store the file path
                     char filePath[MAX_PATH] = {0};
 
@@ -197,6 +217,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
                         file_path = (char*)malloc(strlen(filePath) + 1);
                         if (file_path) {
                             strcpy((char*)file_path, filePath);
+                            cart_changed = true;
                         } else {
                             MessageBox(hwnd, "Failed to allocate memory for file path.", "Error", MB_OK | MB_ICONERROR);
                         }
@@ -204,33 +225,78 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
                         MessageBox(hwnd, "No file selected.", "Load ROM", MB_OK | MB_ICONWARNING);
                     }
 
-                    if (nes_running) {
+                    // Check for NES' state and act accordingly, this is messy and there is 
+                    //  probably a much more efficient way to do these checks ;0)
+                    if (nes_running && cart_changed) {
                         // Reset and assign cartridge
                         cart = init_cart(file_path);
                         bus->cart = cart;
                         ppu->cart = cart;
                         // Reset the NES
                         reset_nes(cpu, bus, ppu);
-                    } else {
+                    } else if ((nes_running && !cart_changed) || (!nes_running && cart_changed)) {
                         nes_running = true;
+                    } else {
+                        nes_running = false;
                     }
 
                     break;
                 }
                 case ID_FILE_EXIT:
+                    cleanup();
                     PostQuitMessage(0);
+                    exit(0);    // This is odd, but it avoids having to select quit twice to close holbroowNES while a program is running. Wierd for now...
                     break;
-
+                case ID_CONTROL_RESET:
+                    if (nes_running) {
+                        reset_nes(cpu, bus, ppu);
+                    }
+                    break;
+                case ID_CONTROL_POWER:
+                    if (nes_running) {
+                        nes_running = false;
+                    } else {
+                        nes_running = true;
+                    }
+                    break;
                 case ID_HELP_HELP:
-                    MessageBox(hwnd, "Help", "Help", MB_OK | MB_ICONINFORMATION);
+                    MessageBox(hwnd,
+                        "Help:\n\n"
+                        "Keyboard Commands:\n"
+                        "P - Power Off\n"
+                        "R - Reset\n\n"
+                        "Z - A Button\n"
+                        "X - B Button\n\n"
+                        "TAB - Select\n"
+                        "ENTER - Start\n\n"
+                        "Arrow Keys:\n"
+                        "UP - Move Up\n"
+                        "DOWN - Move Down\n"
+                        "LEFT - Move Left\n"
+                        "RIGHT - Move Right\n",
+                        "holbroowNES Help",
+                        MB_OK | MB_ICONINFORMATION);
                     break;
                 case ID_HELP_ABOUT:
-                    MessageBox(hwnd, "About", "About", MB_OK | MB_ICONINFORMATION);
+                    MessageBox(hwnd,
+                        "About holbroowNES:\n\n"
+                        "holbroowNES - By Will Holbrook (holbroow)\n"
+                        "Written for the SCC300 Third Year Project "
+                        "at Lancaster University (2024-2025)\n\n"
+                        "This software is a NES emulator designed to replicate the functionality of the original "
+                        "Nintendo Entertainment System.\n\n"
+                        "Feel free to reach out to me @\n"
+                        "https://www.linkedin.com/in/willholbrook/\n"
+                        "https://github.com/holbroow",
+                        "About holbroowNES",
+                        MB_OK | MB_ICONINFORMATION);
                     break;
+                    
             }
             break;
 
         case WM_DESTROY:
+            cleanup();
             PostQuitMessage(0);
             break;
 
@@ -247,26 +313,39 @@ int init_window() {
     wc.hInstance = GetModuleHandle(NULL);
     wc.lpszClassName = "SDLWindowClass";
 
+    wc.hIcon = (HICON)LoadImage(
+        wc.hInstance,                 // Handle to application instance
+        "resources/icon.ico",         // Path to the .ico file
+        IMAGE_ICON,                   // Type of image
+        0, 0,                         // Default size (use dimensions from .ico file)
+        LR_LOADFROMFILE               // Load icon from file
+    );
+
     RegisterClass(&wc);
 
     hwnd = CreateWindowEx(
         0, "SDLWindowClass", "holbroowNES",
-        WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT,
+        WS_OVERLAPPEDWINDOW, 25, 25,
         NES_WIDTH * SCALE, ((NES_HEIGHT * SCALE) + GetSystemMetrics(SM_CYMENU)), NULL, NULL, GetModuleHandle(NULL), NULL);
 
     if (!hwnd) {
         MessageBox(NULL, "Failed to create window", "Error", MB_OK | MB_ICONERROR);
-        exit(-1);
+        return -1;
     }
 
     // Create menu bar
     HMENU hMenu = CreateMenu();
     HMENU hFileMenu = CreateMenu();
+    HMENU hControlMenu = CreateMenu();
     HMENU hHelpMenu = CreateMenu();
 
     AppendMenu(hMenu, MF_POPUP, (UINT_PTR)hFileMenu, "File");
     AppendMenu(hFileMenu, MF_STRING, ID_FILE_LOADROM, "Load ROM");
     AppendMenu(hFileMenu, MF_STRING, ID_FILE_EXIT, "Quit");
+
+    AppendMenu(hMenu, MF_POPUP, (UINT_PTR)hControlMenu, "Control");
+    AppendMenu(hControlMenu, MF_STRING, ID_CONTROL_RESET, "Reset");
+    AppendMenu(hControlMenu, MF_STRING, ID_CONTROL_POWER, "Power");
 
     AppendMenu(hMenu, MF_POPUP, (UINT_PTR)hHelpMenu, "Help");
     AppendMenu(hHelpMenu, MF_STRING, ID_HELP_HELP, "Help");
@@ -277,132 +356,138 @@ int init_window() {
 
 
 // Main function
-int main(int argc, char* argv[]) {
-    // Allow a parameter (drag and drop to the .exe / CLI arg) if given
-    if(argv[1]) {
-        file_path = argv[1];
+int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow) {
+    // Parse command-line arguments (if provided)
+    if (strlen(lpCmdLine) > 0) {
+        file_path = strdup(lpCmdLine); // Append the argument to file_path
     }
 
     // Initialise 'holbroowNES' window (If error occurs, exit program)
-    init_window();
+    if (init_window() == -1) {
+        MessageBox(NULL, "Failed to initialize the application window.", "Error", MB_OK | MB_ICONERROR);
+        return -1;
+    }
 
     // Initialise Display
     init_sdl_display();
 
-    // If we tookm a file path previously from an argument, we can start the nes instantly
+    // If we took a file path previously from an argument, we can start the nes instantly
     if (file_path) {
         nes_running = true;
     }
 
-    // This will happen if there is no file_path (provided .nes ROM)
-    while (!nes_running) {
-        // Handle Windows messages
-        while (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE)) {
-            if (msg.message == WM_QUIT) {
-                exit(0);
-            }
-            TranslateMessage(&msg);
-            DispatchMessage(&msg);
-        }
-    }
+    // Forever, we run the NES either runninng or non-running, within the holbroowNES application, handling it accordingly
+    while(true) {
+        // Blank the screen (useful after a shutdown)
+        SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0);
+        SDL_RenderClear(renderer);
+        SDL_RenderPresent(renderer);
 
-    // Initialise the 'NES' with a Cartridge, Bus, PPU, and CPU
-    init_nes();
-
-    // Frame / Keyboard Variables
-    frame_duration_ms       = 16;                           // Store our target of ~60 FPS (16ms per frame)
-    frame_start_time_ms     = SDL_GetTicks();               // Store the start time for initial frame
-    state                   = SDL_GetKeyboardState(NULL);   // Configure a value to store keyboard's 'state' (what is/isn't pressed)
-
-    // Indefinitely... Run the NES!
-    while (nes_running) {
-        // Handle Windows messages
-        if (nes_cycles_passed % 100 == 0) {
+        // This will happen if:
+        //  a: there is no file_path (provided .nes ROM)
+        //  b: the nes is powered off by the menubar option
+        while (!nes_running) {
+            // Handle Windows messages
             while (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE)) {
                 if (msg.message == WM_QUIT) {
-                    nes_running = false;
+                    exit(0);
                 }
                 TranslateMessage(&msg);
                 DispatchMessage(&msg);
             }
         }
 
-        // Handle any key presses (controller activity)
-        bus->controller[0] = 0x00;                                          // Initiate Controller 0 (1st controller)
 
-        if (state[SDL_SCANCODE_P])          nes_running = false;            // POWER    (Key P) This only really powers off :0)
-        if (state[SDL_SCANCODE_R])          reset_nes(cpu, bus, ppu);       // RESET    (Key R)
+        // Initialise the 'NES' with a Cartridge, Bus, PPU, and CPU
+        init_nes();
 
-        if (state[SDL_SCANCODE_Z])          bus->controller[0] |= 0x80;     // A        (Key Z)
-        if (state[SDL_SCANCODE_X])          bus->controller[0] |= 0x40;     // B        (Key X)
-
-        if (state[SDL_SCANCODE_TAB])        bus->controller[0] |= 0x20;     // Select   (Key SELECT)
-        if (state[SDL_SCANCODE_RETURN])     bus->controller[0] |= 0x10;     // Start    (Key ENTER/RETURN)
-
-        if (state[SDL_SCANCODE_UP])         bus->controller[0] |= 0x08;     // Up       (Key UP ARR)
-        if (state[SDL_SCANCODE_DOWN])       bus->controller[0] |= 0x04;     // Down     (Key DOWN ARR)
-        if (state[SDL_SCANCODE_LEFT])       bus->controller[0] |= 0x02;     // Left     (Key LEFT ARR)
-        if (state[SDL_SCANCODE_RIGHT])      bus->controller[0] |= 0x01;     // Right    (Key RIGHT ARR)
+        // Frame / Keyboard Variables
+        frame_duration_ms       = 16;                           // Store our target of ~60 FPS (16ms per frame)
+        frame_start_time_ms     = SDL_GetTicks();               // Store the start time for initial frame
+        state                   = SDL_GetKeyboardState(NULL);   // Configure a value to store keyboard's 'state' (what is/isn't pressed)
 
 
-        // Do 1 NES 'clock'
-        /* Within 'nes_clock':
-            Controller state is checked (KB input) (We pass in the Keyboard's state, as visible)
-            The PPU is clocked thrice
-            The CPU is clocked once
-            DMA and NMI is partially handled here as well
-        */
-        nes_clock();
-
-
-        // If the PPU completes the frame rendering process...
-        if (ppu->frame_done) {
-            // Reset flag
-            ppu->frame_done = false;
-
-            // Render frame to the SDL window/'display'
-            SDL_UpdateTexture(texture, NULL, ppu->framebuffer + 2048, NES_WIDTH * sizeof(uint32_t)); // we skip 2048 bytes to skip the first 8 scanlines, and consequently the last 8 scanlines (224 height instead of 240)
-            SDL_RenderCopy(renderer, texture, NULL, NULL);
-            SDL_RenderPresent(renderer);
-            frame_num++;    // Increment the count (debug purposes only, otherwise serves no functional purpose)
-
-            // Handle any SDL events
-            for (SDL_Event event; SDL_PollEvent(&event);) {
-                if (event.type == SDL_QUIT) {
-                    return 0;
+        // Run the NES!
+        while (nes_running) {
+            // Handle Windows messages
+            if (nes_cycles_passed % 100 == 0) {
+                while (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE)) {
+                    if (msg.message == WM_QUIT) {
+                        nes_running = false;
+                    }
+                    TranslateMessage(&msg);
+                    DispatchMessage(&msg);
                 }
             }
 
-            // Attempt to time the frame to achieve ~60fps
-            frame_end_time_ms = SDL_GetTicks();
-            int delay_time = frame_duration_ms - (int)(frame_end_time_ms - frame_start_time_ms);
-            if (delay_time > 0) {
-                SDL_Delay((uint32_t)delay_time);
-            }
+            // Handle any key presses (controller activity)
+            bus->controller[0] = 0x00;                                          // Initiate Controller 0 (1st controller)
 
-            // Debug to check frequency of 60 frame update events
-            if (frame_num % 60 == 0) {
-                printf("60 frames passed/updated!\n");
-            }
+            if (state[SDL_SCANCODE_P])          nes_running = false;            // POWER    (Key P) This only really powers off :0)
+            if (state[SDL_SCANCODE_R])          reset_nes(cpu, bus, ppu);       // RESET    (Key R)
 
-            // Update the start time for the next frame
-            frame_start_time_ms = SDL_GetTicks();   // Reset frame timer
+            if (state[SDL_SCANCODE_Z])          bus->controller[0] |= 0x80;     // A        (Key Z)
+            if (state[SDL_SCANCODE_X])          bus->controller[0] |= 0x40;     // B        (Key X)
+
+            if (state[SDL_SCANCODE_TAB])        bus->controller[0] |= 0x20;     // Select   (Key SELECT)
+            if (state[SDL_SCANCODE_RETURN])     bus->controller[0] |= 0x10;     // Start    (Key ENTER/RETURN)
+
+            if (state[SDL_SCANCODE_UP])         bus->controller[0] |= 0x08;     // Up       (Key UP ARR)
+            if (state[SDL_SCANCODE_DOWN])       bus->controller[0] |= 0x04;     // Down     (Key DOWN ARR)
+            if (state[SDL_SCANCODE_LEFT])       bus->controller[0] |= 0x02;     // Left     (Key LEFT ARR)
+            if (state[SDL_SCANCODE_RIGHT])      bus->controller[0] |= 0x01;     // Right    (Key RIGHT ARR)
+
+
+            // Do 1 NES 'clock'
+            /* Within 'nes_clock':
+                Controller state is checked (KB input) (We pass in the Keyboard's state, as visible)
+                The PPU is clocked thrice
+                The CPU is clocked once
+                DMA and NMI is partially handled here as well
+            */
+            nes_clock();
+
+
+            // If the PPU completes the frame rendering process...
+            if (ppu->frame_done) {
+                // Reset flag
+                ppu->frame_done = false;
+
+                // Render frame to the SDL window/'display'
+                SDL_UpdateTexture(texture, NULL, ppu->framebuffer + 2048, NES_WIDTH * sizeof(uint32_t)); // we skip 2048 bytes to skip the first 8 scanlines, and consequently the last 8 scanlines (224 height instead of 240)
+                SDL_RenderCopy(renderer, texture, NULL, NULL);
+                SDL_RenderPresent(renderer);
+                frame_num++;    // Increment the count (debug purposes only, otherwise serves no functional purpose)
+
+                // Handle any SDL events
+                for (SDL_Event event; SDL_PollEvent(&event);) {
+                    if (event.type == SDL_QUIT) {
+                        return 0;
+                    }
+                }
+
+                // Attempt to time the frame to achieve ~60fps
+                frame_end_time_ms = SDL_GetTicks();
+                int delay_time = frame_duration_ms - (int)(frame_end_time_ms - frame_start_time_ms);
+                if (delay_time > 0) {
+                    SDL_Delay((uint32_t)delay_time);
+                }
+
+                // Debug to check frequency of 60 frame update events
+                if (frame_num % 60 == 0) {
+                    printf("60 frames passed/updated!\n");
+                }
+
+                // Update the start time for the next frame
+                frame_start_time_ms = SDL_GetTicks();   // Reset frame timer
+            }
         }
+
     }
 
 
     // Clean up - Free NES components + SDL/Window from memory
-    if (file_path) {
-        free((void*)file_path);
-    }
-    free(cpu);
-    free(ppu);
-    free(bus);
-    free(cart);
-    SDL_DestroyRenderer(renderer);
-    SDL_DestroyTexture(texture);
-    SDL_DestroyWindow(sdl_window);
-    SDL_Quit();
+    cleanup();
 
     // Bye bye!
     return 0;
