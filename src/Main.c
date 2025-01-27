@@ -26,6 +26,7 @@
 #define ID_FILE_EXIT 9002
 #define ID_HELP_HELP 9003
 #define ID_HELP_ABOUT 9004
+#define ID_FILE_UNLOADROM 9007
 #define ID_CONTROL_RESET 9005
 #define ID_CONTROL_POWER 9006
 
@@ -242,6 +243,12 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
 
                     break;
                 }
+                case ID_FILE_UNLOADROM:
+                    cart = NULL;
+                    bus->cart = NULL;
+                    ppu->cart = NULL;
+                    nes_running = false;
+                    break;
                 case ID_FILE_EXIT:
                     cleanup();
                     PostQuitMessage(0);
@@ -341,6 +348,7 @@ int init_window() {
 
     AppendMenu(hMenu, MF_POPUP, (UINT_PTR)hFileMenu, "File");
     AppendMenu(hFileMenu, MF_STRING, ID_FILE_LOADROM, "Load ROM");
+    AppendMenu(hFileMenu, MF_STRING, ID_FILE_UNLOADROM, "Unload ROM");
     AppendMenu(hFileMenu, MF_STRING, ID_FILE_EXIT, "Quit");
 
     AppendMenu(hMenu, MF_POPUP, (UINT_PTR)hControlMenu, "Control");
@@ -378,6 +386,11 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 
     // Forever, we run the NES either runninng or non-running, within the holbroowNES application, handling it accordingly
     while(true) {
+        // Frame / Keyboard Variables
+        frame_duration_ms       = 16;                           // Store our target of ~60 FPS (16ms per frame)
+        frame_start_time_ms     = SDL_GetTicks();               // Store the start time for initial frame
+        state                   = SDL_GetKeyboardState(NULL);   // Configure a value to store keyboard's 'state' (what is/isn't pressed)
+
         // Blank the screen (useful after a shutdown)
         SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0);
         SDL_RenderClear(renderer);
@@ -400,12 +413,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 
         // Initialise the 'NES' with a Cartridge, Bus, PPU, and CPU
         init_nes();
-
-        // Frame / Keyboard Variables
-        frame_duration_ms       = 16;                           // Store our target of ~60 FPS (16ms per frame)
-        frame_start_time_ms     = SDL_GetTicks();               // Store the start time for initial frame
-        state                   = SDL_GetKeyboardState(NULL);   // Configure a value to store keyboard's 'state' (what is/isn't pressed)
-
+        
 
         // Run the NES!
         while (nes_running) {
@@ -423,7 +431,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
             // Handle any key presses (controller activity)
             bus->controller[0] = 0x00;                                          // Initiate Controller 0 (1st controller)
 
-            if (state[SDL_SCANCODE_P])          nes_running = false;            // POWER    (Key P) This only really powers off :0)
+            if (state[SDL_SCANCODE_P])          nes_running = false;            // POWER    (Key P) This only powers OFF within this loop
             if (state[SDL_SCANCODE_R])          reset_nes(cpu, bus, ppu);       // RESET    (Key R)
 
             if (state[SDL_SCANCODE_Z])          bus->controller[0] |= 0x80;     // A        (Key Z)
