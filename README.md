@@ -11,50 +11,55 @@
 
 ## Overview
 
-`holbroow6502` is an implementation of a fully functional NES emulator written in C. This project is part of the SCC 300 Third Year Project at Lancaster University, overseen by Professor Andrew Scott. Commit count is low due to a lot of changes on the fly during the development on my machine, at the point of 10 'commits' the project had likely undergone up to 200-300 small, seemingly insignificant changes privately on my machine.
+`holbroowNES` is an implementation of a fully functional NES emulator written in C. This project is part of the SCC 300 Third Year Project at Lancaster University, overseen by Professor Andrew Scott. Commit count is low due to a lot of changes on the fly during the development on my machine, at the point of 10 'commits' the project had likely undergone up to 200-300 small, seemingly insignificant changes privately on my machine.
+
+holbroowNES emulates the classic NES by implementing:
+
+- **CPU Emulation:** A full implementation of the NES’s 2A03 CPU (a variant of the MOS 6502) including all standard opcodes, addressing modes, and even a few unofficial opcodes.
+- **PPU Emulation:** The 2C02 Picture Processing Unit (PPU) is emulated for background and sprite rendering, scrolling, and palette management.
+- **Memory & Bus Architecture:** A dedicated bus connects the CPU, PPU, and Cartridge, with support for DMA transfers.
+- **Cartridge & Mapper Support:** Load and run NES ROMs with Mapper 0 (NROM) support. The framework is also in place to add additional mappers (e.g., Mapper 1, 2, 3).
+- **SDL2 Rendering:** Utilizes SDL2 to create a window and render the NES framebuffer at a scaled resolution.
+- **Windows Integration:** Incorporates Windows-specific features (e.g., file open dialogs and menu-based controls) for an integrated user experience.
 
 ## Features
 
-- **6502 CPU Emulation:** Accurately emulates the 6502 architecture.
-- **Instruction Set:** Implements all 6502 instructions.
-- **Testing Framework:** Includes programs to test CPU states and instruction sequences.
-- **Memory Management:** Utilizes a dedicated bus system for memory operations.
+- **Accurate NES Hardware Emulation:** CPU, PPU, memory bus, and DMA.
+- **Cartridge Loading:** Support for standard NES ROM formats (.nes, .rom, .bin) via an interactive file dialog.
+- **User Interface:** Windows-based menu options for loading ROMs, resetting, and powering off the emulator.
+- **Keyboard Controls:**
+  - **P:** Power Off
+  - **R:** Reset
+  - **Z:** A Button
+  - **X:** B Button
+  - **TAB:** Select
+  - **ENTER:** Start
+  - **Arrow Keys:** Directional inputs
 
-## Project Structure
 
-### Files
+## Requirements
 
-| File             | Description                                                                                          |
-| ---------------- | ---------------------------------------------------------------------------------------------------- |
-| `Main.c`         | A simple program used to test the CPU's state by running test instruction sequences.                 |
-| `holbroow6502.c` | The CPU implementation file containing all instructions, structured according to its header file.    |
-| `holbroow6502.h` | Header file for the CPU, defining structures and function prototypes.                                |
-| `Bus.c`          | Implements the Bus, which manages a block of memory and handles read/write operations.               |
-| `Bus.h`          | Header file for the Bus system.                                                                     |
-
-## Getting Started
-
-### Prerequisites
-
-- **C Compiler:** Ensure you have a C compiler installed (e.g., GCC).
+- **C Compiler:** A C compiler supporting C99 (or later).
+- **SDL2 Library:** Make sure the SDL2 development libraries are installed.
+- **Windows Environment:** The current implementation uses Windows-specific APIs (e.g., `<windows.h>`, `<commdlg.h>`). For other platforms, modifications may be necessary.
 
 ### Installation
 
 1. **Clone the Repository:**
     ```bash
-    git clone https://github.com/yourusername/holbroow6502.git
+    git clone https://github.com/holbroow/holbroowNES.git
     ```
 2. **Navigate to the Project Directory:**
     ```bash
-    cd holbroow6502
+    cd holbroowNES
     ```
 3. **Compile the Project:**
     ```bash
-    gcc -o test Main.c holbroow6502.c Bus.c
+    make
     ```
 
 ### Usage
 
 Run the emulator using the compiled executable:
 ```bash
-./test.exe
+./holbroowNES.exe
