@@ -100,11 +100,6 @@ Cartridge* init_cart(const char* filepath) {
             mapper_load_1(cartridge->mapper);
             printf("[CARTRIDGE] Mapper ID (%d) implemented\n", cartridge->mapper_id); 
             break;
-        case 2:
-            // Mapper 2
-            mapper_load_2(cartridge->mapper);
-            printf("[CARTRIDGE] Mapper ID (%d) implemented\n", cartridge->mapper_id); 
-            break;
         default:
             // An unimplemented mapper
             printf("[CARTRIDGE] Mapper ID (%d) not implemented\n", cartridge->mapper_id);
