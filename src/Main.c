@@ -16,9 +16,9 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <stdio.h>
-#include <windows.h>
-#include <commdlg.h> // For GetOpenFileName
-#include <SDL2/SDL.h>
+#include <windows.h>    // For the Windows API (window, menubar, etc.)
+#include <commdlg.h>    // For GetOpenFileName
+#include <SDL2/SDL.h>   // For the SDL-powered NES System display
 
 // Define window params
 // Menu IDs
@@ -31,9 +31,15 @@
 #define ID_CONTROL_POWER 9006
 
 // Define display params
-#define NES_WIDTH 256           // Screen pixel 'Width' of NES res
-#define NES_HEIGHT (240 - 16)   // Screen pixel 'Height' of NES res (240 - 16 to retain 224 height (hidden CRT scanlines effect)) (we effectively cut off the top and bottom 8 scanlines)
-#define SCALE 4                 // Scale factor for improved visibility
+#define NES_WIDTH   256             // Screen pixel 'Width' of NES res
+#define NES_HEIGHT  (240 - 16)      // Screen pixel 'Height' of NES res (240 - 16 to retain 224 height (hidden CRT scanlines effect)) (we effectively cut off the top and bottom 8 scanlines)
+#define SCALE       4               // Scale factor for improved visibility
+
+// Define program window params
+#define WINDOW_WIDTH (NES_WIDTH * SCALE)
+#define WINDOW_HEIGHT ((NES_HEIGHT * SCALE) + GetSystemMetrics(SM_CYMENU))
+#define WINDOW_X_POS 100
+#define WINDOW_Y_POS 100
 
 const char* file_path;
 
@@ -332,8 +338,8 @@ int init_window() {
 
     hwnd = CreateWindowEx(
         0, "SDLWindowClass", "holbroowNES",
-        WS_OVERLAPPEDWINDOW, 25, 25,
-        NES_WIDTH * SCALE, ((NES_HEIGHT * SCALE) + GetSystemMetrics(SM_CYMENU)), NULL, NULL, GetModuleHandle(NULL), NULL);
+        WS_OVERLAPPEDWINDOW, WINDOW_X_POS, WINDOW_Y_POS,
+        WINDOW_WIDTH, WINDOW_HEIGHT, NULL, NULL, GetModuleHandle(NULL), NULL);
 
     if (!hwnd) {
         MessageBox(NULL, "Failed to create window", "Error", MB_OK | MB_ICONERROR);

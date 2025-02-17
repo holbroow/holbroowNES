@@ -10,11 +10,7 @@
 
 #include "Mapper.h"
 
-// Define constants for maximum sizes (adjust as needed)
-#define MAX_PRG_ROM_SIZE (256 * 16 * 1024) // 256 banks * 16KB
-#define MAX_CHR_ROM_SIZE (256 * 8 * 1024)  // 256 banks * 8KB
-#define TRAINER_SIZE 512
-
+// Data Structures
 typedef struct Vector {
     uint8_t *items;
     size_t size;
@@ -36,11 +32,13 @@ typedef struct Cartridge {
     Mirror mirror;
 } Cartridge;
 
-// Function prototypes
+// Init Function
 Cartridge* init_cart(const char* filepath);
 
+// CPU Read/Write
 bool cartridge_cpu_read(Cartridge *cartridge, uint16_t address, uint8_t* data);
 bool cartridge_cpu_write(Cartridge *cartridge, uint16_t address, uint8_t data);
 
+// PPU Read/Write
 bool cartridge_ppu_read(Cartridge *cartridge, uint16_t address, uint8_t* data);
 bool cartridge_ppu_write(Cartridge *cartridge, uint16_t address, uint8_t data);
