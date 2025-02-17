@@ -6,7 +6,7 @@
 // Great resource, this file and its concepts are mostly developed using this datasheet.
 // https://www.nesdev.org/obelisk-6502-guide
 
-#include "holbroow6502.h"
+#include "CPU.h"
 #include "Bus.h"
 #include <stdlib.h>
 #include <stddef.h>

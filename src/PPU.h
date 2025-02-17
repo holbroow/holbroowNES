@@ -146,7 +146,6 @@ typedef struct Ppu {
 
 // Init PPU (+ cartridge with said PPU)
 Ppu* init_ppu();
-void ppu_connect_cart(Ppu* ppu, Cartridge* cart);
 void ppu_reset(Ppu* ppu);
 
 // 'Clock' the PPU

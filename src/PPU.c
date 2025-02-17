@@ -183,9 +183,6 @@ void ppu_reset(Ppu* ppu) {
     ppu->nmi_occurred = false;
 }
 
-void ppu_connect_cart(Ppu* ppu, Cartridge* cart) {
-    ppu->cart = cart;
-}
 
 static inline uint8_t flipbyte(uint8_t b)
 {

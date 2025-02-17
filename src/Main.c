@@ -7,7 +7,7 @@
 #define SDL_MAIN_HANDLED
 
 #include "Bus.h"
-#include "holbroow6502.h"
+#include "CPU.h"
 #include "PPU.h"
 #include "Cartridge.h"
 
