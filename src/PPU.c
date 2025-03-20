@@ -584,7 +584,7 @@ uint8_t ppu_read(Ppu* ppu, uint16_t address) {
     uint8_t data = 0x00;
     address &= 0x3FFF;
     if (cartridge_ppu_read(ppu->cart, address, &data)) {
-        // Read handled by cartridge
+        // Read handled by cartridge, perfect!
     }
     else if (address <= 0x1FFF) { // Pattern table region
         data = ppu->pattern_table[(address & 0x1000) >> 12][address & 0x0FFF];
@@ -618,7 +618,7 @@ uint8_t ppu_read(Ppu* ppu, uint16_t address) {
 void ppu_write(Ppu* ppu, uint16_t address, uint8_t data) {
     address &= 0x3FFF;
     if (cartridge_ppu_write(ppu->cart, address, data)) {
-        // Write handled by cartridge
+        // Write handled by cartridge, perfect!
     }
     else if (address <= 0x1FFF) { // Pattern table region
         ppu->pattern_table[(address & 0x1000) >> 12][address & 0x0FFF] = data;
