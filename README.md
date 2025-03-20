@@ -15,7 +15,7 @@
 
 holbroowNES emulates the classic NES by implementing:
 
-- **CPU Emulation:** A full implementation of the NES’s 2A03 CPU (a variant of the MOS 6502) including all standard opcodes, addressing modes, and even a few unofficial opcodes.
+- **CPU Emulation:** A full implementation of the NES’s 2A03 CPU (a variant of the MOS 6502) including all standard opcodes, and addressing modes.
 - **PPU Emulation:** The 2C02 Picture Processing Unit (PPU) is emulated for background and sprite rendering, scrolling, and palette management.
 - **Memory & Bus Architecture:** A dedicated bus connects the CPU, PPU, and Cartridge, with support for DMA transfers.
 - **Cartridge & Mapper Support:** Load and run NES ROMs with Mapper 0 (NROM) support. The framework is also in place to add additional mappers (e.g., Mapper 1, 2, 3).
