@@ -84,11 +84,9 @@ static inline uint32_t get_palette_colour(uint8_t i) {
     return 0x000000FF | (NES_PALETTE[index] << 8);
 }
 
-// Flip a byte horizontally (used for sprite rendering)
+// Flip a byte horizontally (used for the rendering of sprites)
 static inline uint8_t flipbyte(uint8_t b) {
-    b = ((b & 0xF0) >> 4) | ((b & 0x0F) << 4);
-    b = ((b & 0xCC) >> 2) | ((b & 0x33) << 2);
-    b = ((b & 0xAA) >> 1) | ((b & 0x55) << 1);
+    b = ((b * 0x0802U & 0x22110U) | (b * 0x8020U & 0x88440U)) * 0x10101U >> 16;
     return b;
 }
 
