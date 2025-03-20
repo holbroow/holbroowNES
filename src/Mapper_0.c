@@ -11,7 +11,7 @@ bool mapper_cpu_write(Mapper *mapper, uint16_t address, uint32_t *mapped_addr);
 bool mapper_ppu_read(Mapper *mapper, uint16_t address, uint32_t *mapped_addr);
 bool mapper_ppu_write(Mapper *mapper, uint16_t address, uint32_t *mapped_addr);
 
-// Init Mapper 0
+// Init Mapper 0 (We use this approach to allow for dynamic function calls in C! We can assign different behavious based on the chosen mapper(from the read-in ROM file))
 void mapper_load_0(Mapper *mapper) {
     mapper->mapper_cpu_read = mapper_cpu_read;
     mapper->mapper_cpu_write = mapper_cpu_write;

@@ -18,21 +18,21 @@ typedef struct Vector {
 } Vector;
 
 typedef enum Mirror {
-    HORIZONTAL = 0,
+    HORIZONTAL,
     VERTICAL
 } Mirror;
 
 typedef struct Cartridge {
     Vector *prg_memory;
     Vector *chr_memory;
-    uint8_t mapper_id;
     uint8_t n_prg_banks;
     uint8_t n_chr_banks;
+    uint8_t mapper_id;
     Mapper *mapper;
     Mirror mirror;
 } Cartridge;
 
-// Init Function
+// Initialise the cartridge (using a '.nes' ROM file)
 Cartridge* init_cart(const char* filepath);
 
 // CPU Read/Write

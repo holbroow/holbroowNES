@@ -31,7 +31,7 @@ Bus* init_bus() {
     return bus;
 }
 
-
+// Bus write (Write data to an in-range address on the bus, 'writes' the data to the 'address')
 void bus_write(Bus* bus, uint16_t address, uint8_t data) {
     if (cartridge_cpu_write(bus->cart, address, data)) {
         // This allows the Cartridge the opportunity to write to the CPU/Main memory if it wants...
@@ -63,7 +63,7 @@ void bus_write(Bus* bus, uint16_t address, uint8_t data) {
     }
 }
 
-
+// Bus read (Read data from an in-range address on the bus, returns the data)
 uint8_t bus_read(Bus* bus, uint16_t address) {
     uint8_t data = 0x00;
     if (cartridge_cpu_read(bus->cart, address, &data)) {

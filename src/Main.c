@@ -26,9 +26,9 @@
 #define ID_FILE_EXIT 9002
 #define ID_HELP_HELP 9003
 #define ID_HELP_ABOUT 9004
-#define ID_FILE_UNLOADROM 9007
 #define ID_CONTROL_RESET 9005
 #define ID_CONTROL_POWER 9006
+#define ID_CONFIG_CONTROLS 9007
 
 // Define display params
 #define NES_WIDTH   256             // Screen pixel 'Width' of NES res
@@ -40,6 +40,23 @@
 #define WINDOW_HEIGHT ((NES_HEIGHT * SCALE) + GetSystemMetrics(SM_CYMENU))
 #define WINDOW_X_POS 100
 #define WINDOW_Y_POS 100
+
+// 'Define' default key binds, these are to be changed by the user at runtime, if needed
+SDL_Scancode key_power   = SDL_SCANCODE_P;
+SDL_Scancode key_reset   = SDL_SCANCODE_R;
+SDL_Scancode key_a       = SDL_SCANCODE_Z;
+SDL_Scancode key_b       = SDL_SCANCODE_X;
+SDL_Scancode key_select  = SDL_SCANCODE_TAB;
+SDL_Scancode key_start   = SDL_SCANCODE_RETURN;
+SDL_Scancode key_up      = SDL_SCANCODE_UP;
+SDL_Scancode key_down    = SDL_SCANCODE_DOWN;
+SDL_Scancode key_left    = SDL_SCANCODE_LEFT;
+SDL_Scancode key_right   = SDL_SCANCODE_RIGHT;
+
+uint32_t frame_duration_ms;
+uint32_t frame_start_time_ms;
+uint32_t frame_end_time_ms;
+uint32_t frame_num = 0;
 
 const char* file_path;
 
@@ -58,10 +75,7 @@ int nes_cycles_passed = 0;
 bool nes_running;
 bool cpu_running;
 bool run_debug = false;
-int frame_num = 0;
-uint32_t frame_duration_ms;
-uint32_t frame_start_time_ms;
-uint32_t frame_end_time_ms;
+int frame_me_end_time_ms;
 int delay_time;
 
 const uint8_t *state;
@@ -78,6 +92,7 @@ void cleanup() {
     SDL_DestroyRenderer(renderer);
     SDL_DestroyTexture(texture);
     SDL_DestroyWindow(sdl_window);
+    free(hwnd);
     SDL_Quit();
 }
 
@@ -132,6 +147,13 @@ void init_sdl_display() {
     bool run_debug = false;
 }
 
+// Update SDL2-based display
+void update_sdl_display() {
+    SDL_UpdateTexture(texture, NULL, ppu->framebuffer + 2048, NES_WIDTH * sizeof(uint32_t)); // we skip 2048 bytes to skip the first 8 scanlines, and consequently the last 8 scanlines (224 height instead of 240)
+    SDL_RenderCopy(renderer, texture, NULL, NULL);
+    SDL_RenderPresent(renderer);
+}
+
 // Reset the NES system (Reset Button simulation)
 void reset_nes(Cpu* cpu, Bus* bus, Ppu* ppu) {
     // Reset CPU
@@ -141,6 +163,8 @@ void reset_nes(Cpu* cpu, Bus* bus, Ppu* ppu) {
     // Reset (not really) PPU
     memset(ppu->framebuffer, 0, sizeof(ppu->framebuffer));
     ppu->frames_completed = 0;
+
+    update_sdl_display();
     
     // NES will now run from 'cycle' 0
     nes_cycles_passed = 0;
@@ -190,70 +214,322 @@ void nes_clock() {
     nes_cycles_passed++;
 }
 
+// Load ROM
+void load_rom() {
+    // Track whether a new cartridge was selected, 
+    //  so as to not reset the current nes program if nothing was selected
+    bool cart_changed = false;
+
+    // Buffer to store the file path
+    char filePath[MAX_PATH] = {0};
+
+    // Open file dialog
+    OPENFILENAME ofn = {0};
+    ofn.lStructSize = sizeof(OPENFILENAME);
+    ofn.hwndOwner = hwnd;
+    ofn.lpstrFilter = "ROM Files\0*.rom;*.bin;*.nes\0All Files\0*.*\0"; // Filter for ROM file types
+    ofn.lpstrFile = filePath;
+    ofn.nMaxFile = MAX_PATH;
+    ofn.Flags = OFN_FILEMUSTEXIST | OFN_PATHMUSTEXIST;
+    ofn.lpstrTitle = "Select a ROM File";
+
+    if (GetOpenFileName(&ofn)) {
+        // Free the previous file_path if it was already set
+        if (file_path) {
+            free((void*)file_path);  // Cast to void* to free a const char*
+        }
+
+        // Allocate memory for the new path and copy it
+        file_path = (char*)malloc(strlen(filePath) + 1);
+        if (file_path) {
+            strcpy((char*)file_path, filePath);
+            cart_changed = true;
+        } else {
+            MessageBox(hwnd, "Failed to allocate memory for file path.", "Error", MB_OK | MB_ICONERROR);
+        }
+    } else {
+        MessageBox(hwnd, "No file selected.", "Load ROM", MB_OK | MB_ICONWARNING);
+    }
+
+    // Check for NES' state and act accordingly, this is messy and there is 
+    //  probably a much more efficient way to do these checks ;0)
+    if (nes_running && cart_changed) {
+        // Reset and assign cartridge
+        cart = init_cart(file_path);
+        bus->cart = cart;
+        ppu->cart = cart;
+        // Reset the NES
+        reset_nes(cpu, bus, ppu);
+    } else if ((nes_running && !cart_changed) || (!nes_running && cart_changed)) {
+        nes_running = true;
+    } else {
+        nes_running = false;
+    }
+}
+
+
+//// TO WHOEVER MAY READ THIS: Sorry this is so messy, this was a result of a few late nights learning how to create proper Windows API windows with buttons and drop downs.
+////                           I am sure this could be a lot more elegant and cleaner, and my 'WindowProc' handler is stupidly messy with many functions not being abstracted to functon calls, but this was efficient
+////                           at a point where I had little time and wanted to produce a good quality ( at least at the front end! :0) ) program. Please forgive me.
+
+// Control Config Helper: Map a key name string to an SDL_Scancode
+SDL_Scancode GetScancodeFromString(const char* keyName) {
+    if (strcmp(keyName, "A") == 0) return SDL_SCANCODE_A;
+    if (strcmp(keyName, "B") == 0) return SDL_SCANCODE_B;
+    if (strcmp(keyName, "C") == 0) return SDL_SCANCODE_C;
+    if (strcmp(keyName, "D") == 0) return SDL_SCANCODE_D;
+    if (strcmp(keyName, "E") == 0) return SDL_SCANCODE_E;
+    if (strcmp(keyName, "F") == 0) return SDL_SCANCODE_F;
+    if (strcmp(keyName, "G") == 0) return SDL_SCANCODE_G;
+    if (strcmp(keyName, "H") == 0) return SDL_SCANCODE_H;
+    if (strcmp(keyName, "I") == 0) return SDL_SCANCODE_I;
+    if (strcmp(keyName, "J") == 0) return SDL_SCANCODE_J;
+    if (strcmp(keyName, "K") == 0) return SDL_SCANCODE_K;
+    if (strcmp(keyName, "L") == 0) return SDL_SCANCODE_L;
+    if (strcmp(keyName, "M") == 0) return SDL_SCANCODE_M;
+    if (strcmp(keyName, "N") == 0) return SDL_SCANCODE_N;
+    if (strcmp(keyName, "O") == 0) return SDL_SCANCODE_O;
+    if (strcmp(keyName, "P") == 0) return SDL_SCANCODE_P;
+    if (strcmp(keyName, "Q") == 0) return SDL_SCANCODE_Q;
+    if (strcmp(keyName, "R") == 0) return SDL_SCANCODE_R;
+    if (strcmp(keyName, "S") == 0) return SDL_SCANCODE_S;
+    if (strcmp(keyName, "T") == 0) return SDL_SCANCODE_T;
+    if (strcmp(keyName, "U") == 0) return SDL_SCANCODE_U;
+    if (strcmp(keyName, "V") == 0) return SDL_SCANCODE_V;
+    if (strcmp(keyName, "W") == 0) return SDL_SCANCODE_W;
+    if (strcmp(keyName, "X") == 0) return SDL_SCANCODE_X;
+    if (strcmp(keyName, "Y") == 0) return SDL_SCANCODE_Y;
+    if (strcmp(keyName, "Z") == 0) return SDL_SCANCODE_Z;
+    if (strcmp(keyName, "0") == 0) return SDL_SCANCODE_0;
+    if (strcmp(keyName, "1") == 0) return SDL_SCANCODE_1;
+    if (strcmp(keyName, "2") == 0) return SDL_SCANCODE_2;
+    if (strcmp(keyName, "3") == 0) return SDL_SCANCODE_3;
+    if (strcmp(keyName, "4") == 0) return SDL_SCANCODE_4;
+    if (strcmp(keyName, "5") == 0) return SDL_SCANCODE_5;
+    if (strcmp(keyName, "6") == 0) return SDL_SCANCODE_6;
+    if (strcmp(keyName, "7") == 0) return SDL_SCANCODE_7;
+    if (strcmp(keyName, "8") == 0) return SDL_SCANCODE_8;
+    if (strcmp(keyName, "9") == 0) return SDL_SCANCODE_9;
+    if (strcmp(keyName, "UP") == 0) return SDL_SCANCODE_UP;
+    if (strcmp(keyName, "DOWN") == 0) return SDL_SCANCODE_DOWN;
+    if (strcmp(keyName, "LEFT") == 0) return SDL_SCANCODE_LEFT;
+    if (strcmp(keyName, "RIGHT") == 0) return SDL_SCANCODE_RIGHT;
+    if (strcmp(keyName, "TAB") == 0) return SDL_SCANCODE_TAB;
+    if (strcmp(keyName, "RETURN") == 0) return SDL_SCANCODE_RETURN;
+    return SDL_SCANCODE_UNKNOWN;
+}
+
+// Control Config Helper: Convert an SDL_Scancode into its string representation
+const char* ScancodeToString(SDL_Scancode scancode) {
+    switch(scancode) {
+        case SDL_SCANCODE_A: return "A";
+        case SDL_SCANCODE_B: return "B";
+        case SDL_SCANCODE_C: return "C";
+        case SDL_SCANCODE_D: return "D";
+        case SDL_SCANCODE_E: return "E";
+        case SDL_SCANCODE_F: return "F";
+        case SDL_SCANCODE_G: return "G";
+        case SDL_SCANCODE_H: return "H";
+        case SDL_SCANCODE_I: return "I";
+        case SDL_SCANCODE_J: return "J";
+        case SDL_SCANCODE_K: return "K";
+        case SDL_SCANCODE_L: return "L";
+        case SDL_SCANCODE_M: return "M";
+        case SDL_SCANCODE_N: return "N";
+        case SDL_SCANCODE_O: return "O";
+        case SDL_SCANCODE_P: return "P";
+        case SDL_SCANCODE_Q: return "Q";
+        case SDL_SCANCODE_R: return "R";
+        case SDL_SCANCODE_S: return "S";
+        case SDL_SCANCODE_T: return "T";
+        case SDL_SCANCODE_U: return "U";
+        case SDL_SCANCODE_V: return "V";
+        case SDL_SCANCODE_W: return "W";
+        case SDL_SCANCODE_X: return "X";
+        case SDL_SCANCODE_Y: return "Y";
+        case SDL_SCANCODE_Z: return "Z";
+        case SDL_SCANCODE_0: return "0";
+        case SDL_SCANCODE_1: return "1";
+        case SDL_SCANCODE_2: return "2";
+        case SDL_SCANCODE_3: return "3";
+        case SDL_SCANCODE_4: return "4";
+        case SDL_SCANCODE_5: return "5";
+        case SDL_SCANCODE_6: return "6";
+        case SDL_SCANCODE_7: return "7";
+        case SDL_SCANCODE_8: return "8";
+        case SDL_SCANCODE_9: return "9";
+        case SDL_SCANCODE_UP: return "UP";
+        case SDL_SCANCODE_DOWN: return "DOWN";
+        case SDL_SCANCODE_LEFT: return "LEFT";
+        case SDL_SCANCODE_RIGHT: return "RIGHT";
+        case SDL_SCANCODE_TAB: return "TAB";
+        case SDL_SCANCODE_RETURN: return "RETURN";
+        default: return "";
+    }
+}
+
+// List of key names used to populate the control boxes.
+const char* keyList[] = {
+    "A", "B", "C", "D", "E", "F", "G", "H", "I", "J",
+    "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T",
+    "U", "V", "W", "X", "Y", "Z",
+    "0", "1", "2", "3", "4", "5", "6", "7", "8", "9",
+    "UP", "DOWN", "LEFT", "RIGHT", "TAB", "RETURN"
+};
+const int keyListCount = sizeof(keyList) / sizeof(keyList[0]);
+
+
+// Config window procedure: creates labels and combo boxes for each control.
+LRESULT CALLBACK ControlConfigWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) {
+    // Create 10 combo boxes for 10 controls.
+    static HWND hCombo[10];
+    const char* controlLabels[10] = {
+        "Power", "Reset", "A", "B", "Select", "Start", "Up", "Down", "Left", "Right"
+    };
+
+    switch (message) {
+        case WM_CREATE: {
+            int y = 20;
+            int spacing = 30;
+            HFONT hFont = (HFONT)GetStockObject(DEFAULT_GUI_FONT);
+            for (int i = 0; i < 10; i++) {
+                // Create label.
+                HWND hLabel = CreateWindow("STATIC", controlLabels[i],
+                    WS_CHILD | WS_VISIBLE,
+                    10, y, 100, 20,
+                    hWnd, NULL, GetModuleHandle(NULL), NULL);
+                SendMessage(hLabel, WM_SETFONT, (WPARAM)hFont, TRUE);
+                // Create combo box.
+                hCombo[i] = CreateWindow("COMBOBOX", NULL,
+                    CBS_DROPDOWNLIST | WS_CHILD | WS_VISIBLE,
+                    120, y, 150, 200,
+                    hWnd, (HMENU)(200 + i), GetModuleHandle(NULL), NULL);
+                SendMessage(hCombo[i], WM_SETFONT, (WPARAM)hFont, TRUE);
+                // Populate combo box with keys.
+                for (int j = 0; j < keyListCount; j++) {
+                    SendMessage(hCombo[i], CB_ADDSTRING, 0, (LPARAM)keyList[j]);
+                }
+                // Set default selection based on the current global binding.
+                const char* currentKeyStr = "";
+                switch(i) {
+                    case 0: currentKeyStr = ScancodeToString(key_power); break;
+                    case 1: currentKeyStr = ScancodeToString(key_reset); break;
+                    case 2: currentKeyStr = ScancodeToString(key_a); break;
+                    case 3: currentKeyStr = ScancodeToString(key_b); break;
+                    case 4: currentKeyStr = ScancodeToString(key_select); break;
+                    case 5: currentKeyStr = ScancodeToString(key_start); break;
+                    case 6: currentKeyStr = ScancodeToString(key_up); break;
+                    case 7: currentKeyStr = ScancodeToString(key_down); break;
+                    case 8: currentKeyStr = ScancodeToString(key_left); break;
+                    case 9: currentKeyStr = ScancodeToString(key_right); break;
+                }
+                for (int j = 0; j < keyListCount; j++) {
+                    if (strcmp(keyList[j], currentKeyStr) == 0) {
+                        SendMessage(hCombo[i], CB_SETCURSEL, j, 0);
+                        break;
+                    }
+                }
+                y += spacing;
+            }
+            // Create OK and Cancel buttons.
+            CreateWindow("BUTTON", "OK",
+                WS_CHILD | WS_VISIBLE | BS_DEFPUSHBUTTON,
+                70, y, 80, 25,
+                hWnd, (HMENU)300, GetModuleHandle(NULL), NULL);
+            CreateWindow("BUTTON", "Cancel",
+                WS_CHILD | WS_VISIBLE,
+                170, y, 80, 25,
+                hWnd, (HMENU)301, GetModuleHandle(NULL), NULL);
+        }
+        break;
+
+        case WM_COMMAND: {
+            int id = LOWORD(wParam);
+            if (id == 300) { // OK button clicked.
+                char keyBuffer[64];
+                for (int i = 0; i < 10; i++) {
+                    int sel = SendMessage(hCombo[i], CB_GETCURSEL, 0, 0);
+                    if (sel != CB_ERR) {
+                        SendMessage(hCombo[i], CB_GETLBTEXT, sel, (LPARAM)keyBuffer);
+                        SDL_Scancode sc = GetScancodeFromString(keyBuffer);
+                        switch(i) {
+                            case 0: key_power = sc; break;
+                            case 1: key_reset = sc; break;
+                            case 2: key_a = sc; break;
+                            case 3: key_b = sc; break;
+                            case 4: key_select = sc; break;
+                            case 5: key_start = sc; break;
+                            case 6: key_up = sc; break;
+                            case 7: key_down = sc; break;
+                            case 8: key_left = sc; break;
+                            case 9: key_right = sc; break;
+                        }
+                    }
+                }
+                DestroyWindow(hWnd);
+            } else if (id == 301) { // Cancel button clicked.
+                DestroyWindow(hWnd);
+            }
+        }
+        break;
+
+        case WM_DESTROY:
+            PostQuitMessage(0);
+            break;
+
+        default:
+            return DefWindowProc(hWnd, message, wParam, lParam);
+    }
+    return 0;
+}
+
+// Function to display the configuration window.
+void ShowConfigWindow(HWND parent) {
+    const char* configClassName = "ConfigWindowClass";
+    WNDCLASS wc = {0};
+    wc.lpfnWndProc   = ControlConfigWndProc;
+    wc.hInstance     = GetModuleHandle(NULL);
+    wc.lpszClassName = configClassName;
+    RegisterClass(&wc);
+
+    HWND hConfigWnd = CreateWindowEx(
+        WS_EX_DLGMODALFRAME,
+        configClassName,
+        "Configure Controls",
+        WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU,
+        CW_USEDEFAULT, CW_USEDEFAULT,
+        350, 400,
+        parent,
+        NULL,
+        GetModuleHandle(NULL),
+        NULL
+    );
+    if (!hConfigWnd) {
+        MessageBox(parent, "Failed to create config window", "Error", MB_OK | MB_ICONERROR);
+        return;
+    }
+    ShowWindow(hConfigWnd, SW_SHOW);
+
+    MSG msg;
+    // Use a PeekMessage loop that captures messages for all windows.
+    while (IsWindow(hConfigWnd)) {
+        while (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE)) {
+            if (!IsDialogMessage(hConfigWnd, &msg)) {
+                TranslateMessage(&msg);
+                DispatchMessage(&msg);
+            }
+        }
+        Sleep(1);  // Yield a little CPU time.
+    }
+}
+
 // Callback for handling Windows messages
 LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
     switch (uMsg) {
         case WM_COMMAND:
             switch (LOWORD(wParam)) {
                 case ID_FILE_LOADROM:
-                {
-                    // Track whether a new cartridge was selected, 
-                    //  so as to not reset the current nes program if nothing was selected
-                    bool cart_changed = false;
-
-                    // Buffer to store the file path
-                    char filePath[MAX_PATH] = {0};
-
-                    // Open file dialog
-                    OPENFILENAME ofn = {0};
-                    ofn.lStructSize = sizeof(OPENFILENAME);
-                    ofn.hwndOwner = hwnd;
-                    ofn.lpstrFilter = "ROM Files\0*.rom;*.bin;*.nes\0All Files\0*.*\0"; // Filter for ROM file types
-                    ofn.lpstrFile = filePath;
-                    ofn.nMaxFile = MAX_PATH;
-                    ofn.Flags = OFN_FILEMUSTEXIST | OFN_PATHMUSTEXIST;
-                    ofn.lpstrTitle = "Select a ROM File";
-
-                    if (GetOpenFileName(&ofn)) {
-                        // Free the previous file_path if it was already set
-                        if (file_path) {
-                            free((void*)file_path);  // Cast to void* to free a const char*
-                        }
-
-                        // Allocate memory for the new path and copy it
-                        file_path = (char*)malloc(strlen(filePath) + 1);
-                        if (file_path) {
-                            strcpy((char*)file_path, filePath);
-                            cart_changed = true;
-                        } else {
-                            MessageBox(hwnd, "Failed to allocate memory for file path.", "Error", MB_OK | MB_ICONERROR);
-                        }
-                    } else {
-                        MessageBox(hwnd, "No file selected.", "Load ROM", MB_OK | MB_ICONWARNING);
-                    }
-
-                    // Check for NES' state and act accordingly, this is messy and there is 
-                    //  probably a much more efficient way to do these checks ;0)
-                    if (nes_running && cart_changed) {
-                        // Reset and assign cartridge
-                        cart = init_cart(file_path);
-                        bus->cart = cart;
-                        ppu->cart = cart;
-                        // Reset the NES
-                        reset_nes(cpu, bus, ppu);
-                    } else if ((nes_running && !cart_changed) || (!nes_running && cart_changed)) {
-                        nes_running = true;
-                    } else {
-                        nes_running = false;
-                    }
-
-                    break;
-                }
-                case ID_FILE_UNLOADROM:
-                    cart = NULL;
-                    bus->cart = NULL;
-                    ppu->cart = NULL;
-                    nes_running = false;
+                    load_rom();
                     break;
                 case ID_FILE_EXIT:
                     cleanup();
@@ -271,6 +547,9 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
                     } else {
                         nes_running = true;
                     }
+                    break;
+                case ID_CONFIG_CONTROLS:
+                    ShowConfigWindow(hwnd);
                     break;
                 case ID_HELP_HELP:
                     MessageBox(hwnd,
@@ -292,7 +571,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
                     break;
                 case ID_HELP_ABOUT:
                     MessageBox(hwnd,
-                        "About holbroowNES:\n\n"
+                        "About holbroowNES (Alpha 1.0.0):\n\n"
                         "holbroowNES - By Will Holbrook (holbroow)\n"
                         "Written for the SCC300 Third Year Project "
                         "at Lancaster University (2024-2025)\n\n"
@@ -318,6 +597,8 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
     }
     return 0;
 }
+
+
 
 //Initialise 'holbroowNES' window
 int init_window() {
@@ -350,16 +631,19 @@ int init_window() {
     HMENU hMenu = CreateMenu();
     HMENU hFileMenu = CreateMenu();
     HMENU hControlMenu = CreateMenu();
+    HMENU hConfigMenu = CreateMenu();
     HMENU hHelpMenu = CreateMenu();
 
     AppendMenu(hMenu, MF_POPUP, (UINT_PTR)hFileMenu, "File");
     AppendMenu(hFileMenu, MF_STRING, ID_FILE_LOADROM, "Load ROM");
-    AppendMenu(hFileMenu, MF_STRING, ID_FILE_UNLOADROM, "Unload ROM");
     AppendMenu(hFileMenu, MF_STRING, ID_FILE_EXIT, "Quit");
 
     AppendMenu(hMenu, MF_POPUP, (UINT_PTR)hControlMenu, "Control");
     AppendMenu(hControlMenu, MF_STRING, ID_CONTROL_RESET, "Reset");
     AppendMenu(hControlMenu, MF_STRING, ID_CONTROL_POWER, "Power");
+
+    AppendMenu(hMenu, MF_POPUP, (UINT_PTR)hConfigMenu, "Config");
+    AppendMenu(hConfigMenu, MF_STRING, ID_CONFIG_CONTROLS, "Controls");
 
     AppendMenu(hMenu, MF_POPUP, (UINT_PTR)hHelpMenu, "Help");
     AppendMenu(hHelpMenu, MF_STRING, ID_HELP_HELP, "Help");
@@ -397,7 +681,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
         frame_start_time_ms     = SDL_GetTicks();               // Store the start time for initial frame
         state                   = SDL_GetKeyboardState(NULL);   // Configure a value to store keyboard's 'state' (what is/isn't pressed)
 
-        // Blank the screen (useful after a shutdown)
+        // Blank the screen (useful after a shutdown / 'power-off')
         SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0);
         SDL_RenderClear(renderer);
         SDL_RenderPresent(renderer);
@@ -409,6 +693,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
             // Handle Windows messages
             while (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE)) {
                 if (msg.message == WM_QUIT) {
+                    cleanup();
                     exit(0);
                 }
                 TranslateMessage(&msg);
@@ -427,6 +712,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
             if (nes_cycles_passed % 100 == 0) {
                 while (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE)) {
                     if (msg.message == WM_QUIT) {
+                        cleanup();
                         nes_running = false;
                     }
                     TranslateMessage(&msg);
@@ -435,21 +721,21 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
             }
 
             // Handle any key presses (controller activity)
-            bus->controller[0] = 0x00;                                          // Initiate Controller 0 (1st controller)
+            bus->controller[0] = 0x00;                                  // Initiate Controller 0 (1st controller)
 
-            if (state[SDL_SCANCODE_P])          nes_running = false;            // POWER    (Key P) This only powers OFF within this loop
-            if (state[SDL_SCANCODE_R])          reset_nes(cpu, bus, ppu);       // RESET    (Key R)
+            if (state[key_power])       nes_running = false;            // POWER    (Key P) This only powers OFF within this loop
+            if (state[key_reset])       reset_nes(cpu, bus, ppu);       // RESET    (Key R)
 
-            if (state[SDL_SCANCODE_Z])          bus->controller[0] |= 0x80;     // A        (Key Z)
-            if (state[SDL_SCANCODE_X])          bus->controller[0] |= 0x40;     // B        (Key X)
+            if (state[key_a])           bus->controller[0] |= 0x80;     // A        (Key Z)
+            if (state[key_b])           bus->controller[0] |= 0x40;     // B        (Key X)
 
-            if (state[SDL_SCANCODE_TAB])        bus->controller[0] |= 0x20;     // Select   (Key SELECT)
-            if (state[SDL_SCANCODE_RETURN])     bus->controller[0] |= 0x10;     // Start    (Key ENTER/RETURN)
+            if (state[key_select])      bus->controller[0] |= 0x20;     // Select   (Key SELECT)
+            if (state[key_start])       bus->controller[0] |= 0x10;     // Start    (Key ENTER/RETURN)
 
-            if (state[SDL_SCANCODE_UP])         bus->controller[0] |= 0x08;     // Up       (Key UP ARR)
-            if (state[SDL_SCANCODE_DOWN])       bus->controller[0] |= 0x04;     // Down     (Key DOWN ARR)
-            if (state[SDL_SCANCODE_LEFT])       bus->controller[0] |= 0x02;     // Left     (Key LEFT ARR)
-            if (state[SDL_SCANCODE_RIGHT])      bus->controller[0] |= 0x01;     // Right    (Key RIGHT ARR)
+            if (state[key_up])          bus->controller[0] |= 0x08;     // Up       (Key UP ARR)
+            if (state[key_down])        bus->controller[0] |= 0x04;     // Down     (Key DOWN ARR)
+            if (state[key_left])        bus->controller[0] |= 0x02;     // Left     (Key LEFT ARR)
+            if (state[key_right])       bus->controller[0] |= 0x01;     // Right    (Key RIGHT ARR)
 
 
             // Do 1 NES 'clock'
@@ -468,9 +754,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
                 ppu->frame_done = false;
 
                 // Render frame to the SDL window/'display'
-                SDL_UpdateTexture(texture, NULL, ppu->framebuffer + 2048, NES_WIDTH * sizeof(uint32_t)); // we skip 2048 bytes to skip the first 8 scanlines, and consequently the last 8 scanlines (224 height instead of 240)
-                SDL_RenderCopy(renderer, texture, NULL, NULL);
-                SDL_RenderPresent(renderer);
+                update_sdl_display();
                 frame_num++;    // Increment the count (debug purposes only, otherwise serves no functional purpose)
 
                 // Handle any SDL events
@@ -501,6 +785,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 
 
     // Clean up - Free NES components + SDL/Window from memory
+    // Nothing here and below should ever really happen... 
+    // We are only ever in two states unless explicitly killed as a progrma process in Windows.
     cleanup();
 
     // Bye bye!
